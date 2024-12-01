@@ -50,3 +50,17 @@ typedef struct storage_info
     time_t si_btime;                                 //心跳时间
     storage_status_t si_status;                      //存储服务器状态
 }storage_info_t;
+
+//键值对
+const int ID_KEY_MAX = 64;
+typedef struct id_pair
+{
+    char id_key[ID_KEY_MAX+1];                       //键
+    long id_value;                                   //值
+    int id_offset;                                   //偏移量
+}id_pair_t;
+
+
+//存储服务器读写磁盘文件缓冲区
+const int STORAGE_RCVWD_SIZE = 512*1024;
+const int STORAGE_RDSND_SIZE = 512*1024;
