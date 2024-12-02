@@ -105,14 +105,14 @@ int cache_c::del(char const *key) const
     acl::redis redis;
     redis.set_client(rconn);
     //借助Redis客户机根据键删除值
-    if(!redis.del(tracker_key.c_str()))
+    if(!redis.del_one(tracker_key.c_str()))
     {
-        logger_warn("del cache fail key:%s",tracker_key.c_str());
+        logger_warn("delete cache fail key:%s",tracker_key.c_str());
         g_rconns->put(rconn,false);   //将连接放回连接池，并标记为不可用
         return ERROR;
     }
 
-    logger("del cache ok,key:%s",tracker_key.c_str());
+    logger("delete cache ok,key:%s",tracker_key.c_str());
     g_rconns->put(rconn,true);  //将连接放回连接池
     return OK;
 }
