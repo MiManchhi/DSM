@@ -19,9 +19,9 @@ bool service_c::business(acl::socket_stream *conn, char const *head) const
 {
     //     |包体长度|命令|状态|  包体  |
     //     |  8    | 1  | 1  |       |
-    //解析包头
+    //解析包头  只收包头，包体在具体业务中再收
     //包体长度
-    long long bodylen = ntoll(head);
+    long long bodylen = ntoll(head);    //转换主机字节序
     if(bodylen < 0)
     {
         error(conn,-1,"invalid body length:%lld < 0",bodylen);
@@ -182,6 +182,41 @@ bool service_c::saddrs(acl::socket_stream *conn, long long bodylen) const
 //处理来自客户机的获取组列表请求
 bool service_c::groups(acl::socket_stream *conn) const
 {
+    //互斥锁加锁---->组表
+    if((errno = pthread_mutex_lock(&g_mutex)))  //pthread_mutex_lock成功返回非零值，错误返回错误号
+    {
+        logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
+        return false;
+    }
+    //全组字符串
+    acl::string group_all;
+    group_all.format(
+        "COUNT OF GROUPS:%lu\n",g_groups.size()  //组数
+    );
+    //遍历组表中的每一个组
+    for(const auto& val:g_groups)
+    {
+        acl::string group_one;  //单组字符串  组名 存储服务器数  活动存储服务器数
+        group_one.format("GROUPNAME:%s\n""COUNT OF STORAGES:%lu\n""COUNT OF ACTIVE STORAGE:%s\n",
+        val.first.c_str(),val.second.size(),"%d");
+        int act = 0;  //活动存储服务器数
+        //遍历每个组的每一台存储服务器
+        for(const auto& value:val.second)
+        {
+            acl::string storage;//存储服务器字符串：版本 主机名 IP：PORT 启动时间 加入时间 心跳时间 状态
+            storage.format("VERSION:%s\n""HOSTNAME:%s\n""ADDRESS:%s:%u\n""STARTUP TIME:%s""JOIN TIME:%s""BEAT TIME:%s""STATUS:",
+            value.si_version,value.si_hostname,value.si_addr,value.si_port,std::string(ctime(&value.si_stime)).c_str(),
+            std::string(ctime(&value.si_jtime)).c_str(),std::string(ctime(&value.si_btime)).c_str());
+        }
+    }
+    //互斥锁解锁
+    if((errno = pthread_mutex_unlock(&g_mutex)))  //pthread_mutex_unlock成功返回非零值，错误返回错误号
+    {
+        logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
+        return false;
+    }
+    //构造响应
+    //发送响应
     return false;
 }
 
