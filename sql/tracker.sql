@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS tnv_trackerdb;
-CREATE DATABASE tnv_trackerdb;
-USE tnv_trackerdb;
+DROP DATABASE IF EXISTS dsm_trackerdb;
+CREATE DATABASE dsm_trackerdb;
+USE dsm_trackerdb;
 
 CREATE TABLE `t_groups_info` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,

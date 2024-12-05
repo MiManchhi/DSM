@@ -27,7 +27,7 @@ int db_c::connect()
     for(const auto& val:g_maddrs)
     {
         //尝试连接所有地址列表，成功返回连接后的mysql，失败返回NULL
-        if((m_mysql = mysql_real_connect(mysql,val.c_str(),"root","123456","tnv_trackerdb",0,NULL,0)))
+        if((m_mysql = mysql_real_connect(mysql,val.c_str(),"root","123456","dsm_trackerdb",0,NULL,0)))
             return OK;
     }
     logger_error("connect database fail:%s",mysql_error(m_mysql = mysql));

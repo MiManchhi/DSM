@@ -65,7 +65,7 @@ void server_c::proc_on_init(void)
         m_status->start();
     }
     // 打印配置信息
-    logger("cfg_appids:%s, cfg_maddrs:%s, cfg_raddrs:%s, cfg_interval:%d,cfg_mtimeout:%d, cfg_maxconns:%d, cfg_ctimeout:%d, vfg_rtimeout:%d, cfg_ktimeout:%d",
+    logger("cfg_appids:%s, cfg_maddrs:%s, cfg_raddrs:%s, cfg_interval:%d,cfg_mtimeout:%d, cfg_maxconns:%d, cfg_ctimeout:%d, cfg_rtimeout:%d, cfg_ktimeout:%d",
            cfg_appids, cfg_maddrs, cfg_raddrs, cfg_interval, cfg_mtimeout, cfg_maxconns, cfg_ctimeout, cfg_rtimeout, cfg_ktimeout);
 }
 
