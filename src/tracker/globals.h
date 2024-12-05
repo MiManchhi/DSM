@@ -23,7 +23,7 @@ extern int cfg_maxconns;                  //Redis连接池最大连接数
 extern int cfg_ctimeout;                  //Redis连接超时
 extern int cfg_rtimeout;                  //Redis读写超时
 extern int cfg_ktimeout;                  //Redis键超时
-extern acl::master_int_tbl cfd_int[];     //整形配置表
+extern acl::master_int_tbl cfg_int[];     //整形配置表
 
 extern std::vector<std::string> g_appids; //应用ID表
 extern std::vector<std::string> g_maddrs; //MySQL地址表

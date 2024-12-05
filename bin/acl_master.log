@@ -1,0 +1,6 @@
+2024/12/05 17:16:14 tracker (pid=19044)(info): log_event_mode(939): use kernel_event
+2024/12/05 17:16:14 tracker (pid=19044)(info): server.cpp(68), proc_on_init: cfg_appids:dsmvideo, cfg_maddrs:127.0.0.1, cfg_raddrs:127.0.0.1:6379, cfg_interval:120,cfg_mtimeout:30, cfg_maxconns:600, cfg_ctimeout:10, vfg_rtimeout:10, cfg_ktimeout:60
+2024/12/05 17:16:14 tracker (pid=19044)(info): acl_threads_server_main(1660), /home/myubuntu/DSM/bin/tracker daemon started, log: acl_master.log
+2024/12/05 18:59:50 tracker (pid=20664)(info): log_event_mode(939): use kernel_event
+2024/12/05 18:59:50 tracker (pid=20664)(info): server.cpp(68), proc_on_init: cfg_appids:dsmvideo, cfg_maddrs:127.0.0.1, cfg_raddrs:127.0.0.1:6379, cfg_interval:120,cfg_mtimeout:30, cfg_maxconns:600, cfg_ctimeout:10, vfg_rtimeout:10, cfg_ktimeout:60
+2024/12/05 18:59:50 tracker (pid=20664)(info): acl_threads_server_main(1660), /home/myubuntu/DSM/bin/tracker daemon started, log: acl_master.log

@@ -1,6 +1,5 @@
 //跟踪服务器
 //声明全局变量
-#pragma once
 
 #include "globals.h"
 
@@ -21,7 +20,7 @@ int cfg_maxconns;                  //Redis连接池最大连接数
 int cfg_ctimeout;                  //Redis连接超时
 int cfg_rtimeout;                  //Redis读写超时
 int cfg_ktimeout;                  //Redis键超时
-acl::master_int_tbl cfd_int[] = {  //整形配置表
+acl::master_int_tbl cfg_int[] = {  //整形配置表
     {"check_active_interval", 120, &cfg_interval, 0, 0},
     {"mysql_rw_timeout", 30, &cfg_mtimeout, 0, 0},
     {"redis_max_conn_num", 600, &cfg_maxconns, 0, 0},
