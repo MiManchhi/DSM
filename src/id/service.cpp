@@ -50,22 +50,119 @@ bool service_c::business(acl::socket_stream *conn, char const *head) const
 
 bool service_c::get(acl::socket_stream *conn, long long bodylen) const
 {
-    return false;
+    // |包体长度|命令|状态|ID键|
+    // |  8    |  1 | 1 |64+1|
+    //检查包体长度
+    long long expectedlen = ID_KEY_MAX + 1;
+    if(bodylen > expectedlen)
+    {
+        error(conn, -1, "invalid body length:%lld > %lld", bodylen, expectedlen);
+        return false;
+    }
+    // 接收包体
+    char body[bodylen];
+    if(conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail:%s, bodylen:%lld, from:%s", acl::last_serror(), bodylen, conn->get_peer());
+        return false;
+    }
+    // 根据ID的键获取其值
+    long value = get(body);
+    if(value < 0)
+    {
+        error(conn, -1, "get id fail,key:%s", body);
+        return false;
+    }
+    logger("get id ok,key:%s, value:%ld", body, value);
+    return id(conn, value);
 }
 
 long service_c::get(char const *key) const
 {
-    return 0;
+    //互斥锁加锁
+    if ((errno = pthread_mutex_lock(&g_mutex))) {
+		logger_error("call pthread_mutex_lock fail: %s",
+			strerror(errno));
+		return -1;
+	}
+    long value = -1;
+    // 在ID表中查找ID
+    bool IsID = false;
+    for (auto &id : g_ids)
+    {
+        //找到ID
+        if(strcmp(id.id_key,key) == 0)
+        {
+            IsID = true;
+            // ID偏移量未达上限---->获取ID并++偏移量
+            if(id.id_offset < cfg_maxoffset)
+            {
+                value = id.id_value + id.id_offset;
+                ++id.id_offset;
+            }
+            // 偏移量达到上限----->从数据库中获取ID----->更新ID表中的ID
+            else if((value = valueFromDB(key)) >= 0) 
+            {
+                id.id_value = value;
+                id.id_offset = 1;
+            }
+        }
+    }
+    //没找到ID---->从数据库中获取ID
+    if(!IsID)
+    {
+        if((value = valueFromDB(key)) >= 0)
+        {
+            //在ID表中添加ID
+            id_pair_t id;
+            strcpy(id.id_key, key);
+            id.id_value = value;
+            id.id_offset = 1;
+            g_ids.push_back(id);
+        }
+    }
+    //互斥锁解锁
+    if ((errno = pthread_mutex_unlock(&g_mutex))) {
+		logger_error("call pthread_mutex_unlock fail: %s",
+			strerror(errno));
+		return -1;
+	}
+    return value;
 }
 
 long service_c::valueFromDB(char const *key) const
 {
-    return 0;
+    //数据库访问对象
+    db_c db;
+    //连接数据库
+    if(db.connect() != OK)
+        return -1;
+    long value;
+    // 获取ID当前值，同时产生下一个值
+    if(db.getID(key,cfg_maxoffset,value) != OK)
+        return -1;
+    return value;
 }
 
 bool service_c::id(acl::socket_stream *conn, long value) const
 {
-    return false;
+    // |包体长度|命令|状态|ID值|
+    // |   8   | 1  | 1  | 8  |
+    //构造响应
+    long long bodylen = BODYLEN_SIZE;
+    long long respondlen = HEADLEN + bodylen;
+    char respond[respondlen] = {};
+    llton(bodylen, respond);
+    respond[BODYLEN_SIZE] = CMD_ID_REPLY;
+    respond[BODYLEN_SIZE + COMMAND_SIZE] = 0;
+    lton(value, respond + HEADLEN);
+    // 发送响应
+    if(conn->write(respond,respondlen) < 0)
+    {
+        logger_error("write fail:%s,respondlen:%lld,to:%s",acl::last_serror(),respondlen,conn->get_peer());
+        return false;
+    }
+    return true;
 }
 
 bool service_c::error(acl::socket_stream *conn, short errnumb, char const *format, ...) const
