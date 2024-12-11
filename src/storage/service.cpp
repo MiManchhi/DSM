@@ -24,7 +24,7 @@ bool service_c::business(acl::socket_stream *conn, char const *head) const
 {
     //  |包体长度|命令|状态|  包体 |
     //  |  8    |  1 | 1  |bodylen|
-    //解析包体
+    //解析包头
     long long bodylen = ntoll(head);
     if(bodylen < 0)
     {
@@ -116,7 +116,60 @@ bool service_c::upload(acl::socket_stream *conn, long long bodylen) const
 // 处理来自客户机的询问文件大小请求
 bool service_c::filesize(acl::socket_stream *conn, long long bodylen) const
 {
-    return false;
+    // |包体长度|命令|状态|应用ID|用户ID|文件ID|
+    // |   8   | 1  | 1  | 16  |  256 |  128 |
+    //检查包体长度
+    long long expectedlen = APPID_SIZE + USERID_SIZE + FILEID_SIZE;
+    if(bodylen != expectedlen)
+    {
+        error(conn, -1, "invalid body length:%lld != %lld", bodylen, expectedlen);
+        return false;
+    }
+    // 接收包体
+    char body[bodylen];
+    if(conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail :%s ,bodylen:%lld, from:%s", acl::last_serror(), bodylen, conn->get_peer());
+        return false;
+    }
+    // 解析包体
+    char appid[APPID_SIZE];
+    strcpy(appid, body);
+    char userid[USERID_SIZE];
+    strcpy(userid, body + APPID_SIZE);
+    char fileid[FILEID_SIZE];
+    strcpy(fileid, body + APPID_SIZE + USERID_SIZE);
+    // 数据库对象
+    db_c db;
+    // 连接数据库
+    if(db.connect() != OK)
+        return false;
+    // 根据文件ID获取其对应的路径及大小
+    std::string filepath;
+    long long filesize;
+    if(db.get(appid,userid,fileid,filepath,filesize) != OK)
+    {
+        error(conn, -1, "read database fail,fileid:%s", fileid);
+        return false;
+    }
+    logger("appid:%s, userid:%s, fileid:%s, filepath:%s, filesize:%lld", appid, userid, fileid, filepath.c_str(), filesize);
+    // 构造响应
+    //  |包体长度|命令|状态|文件大小|
+    //  |  8    | 1  | 1  |  8    |
+    bodylen = BODYLEN_SIZE;
+    long long respondlen = HEADLEN + bodylen;
+    char respond[respondlen] = {};
+    llton(bodylen, respond);
+    respond[BODYLEN_SIZE] = CMD_STORAGE_REPLY;
+    respond[BODYLEN_SIZE + COMMAND_SIZE] = 0;
+    llton(filesize, respond + HEADLEN);
+    // 发送响应
+    if(conn->write(respond,respondlen) < 0)
+    {
+        logger_error("write fail:%s, respondlen:%lld, to:%s", acl::last_serror(), respondlen, conn->get_peer());
+        return false;
+    }
+    return true;
 }
 
 // 处理来自客户机的下载文件请求
