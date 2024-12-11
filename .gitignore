@@ -1,0 +1,7 @@
+#忽略vscode配置文件
+.vscode/
+#递归忽略所有构建目录
+src/**/build/
+#忽略日志文件
+bin/*.log
+
