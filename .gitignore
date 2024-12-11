@@ -4,4 +4,3 @@
 src/**/build/
 #忽略日志文件
 bin/*.log
-
