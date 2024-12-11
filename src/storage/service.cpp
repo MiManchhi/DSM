@@ -166,7 +166,7 @@ bool service_c::filesize(acl::socket_stream *conn, long long bodylen) const
     // 发送响应
     if(conn->write(respond,respondlen) < 0)
     {
-        logger_error("write fail:%s, respondlen:%lld, to:%s", acl::last_serror(), respondlen, conn->get_peer());
+        logger_error("write fail: %s, respondlen:%lld, to:%s", acl::last_serror(), respondlen, conn->get_peer());
         return false;
     }
     return true;
