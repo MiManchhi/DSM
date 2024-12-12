@@ -26,7 +26,7 @@ acl::master_int_tbl cfg_int[] = {  //整形配置表
     {"redis_max_conn_num", 600, &cfg_maxconns, 0, 0},
     {"redis_conn_timeout", 10, &cfg_ctimeout, 0, 0},
     {"redis_rw_timeout", 10, &cfg_rtimeout, 0, 0},
-    {"redis_key_timeout", 60, &cfg_ktimeout},
+    {"redis_key_timeout", 60, &cfg_ktimeout,0 , 0},
     {0, 0, 0, 0, 0}
 };
 

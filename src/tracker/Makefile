@@ -16,7 +16,7 @@ CC         = g++
 # 连接器
 LINK       = g++
 # 编译选项
-CFLAGS     = -c -Wall -I../common
+CFLAGS     = -c -Wall -Wextra -I../common
 # 库依赖项
 LIBS       = -pthread -lacl_all `mysql_config --libs`
 

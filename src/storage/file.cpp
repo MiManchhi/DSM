@@ -94,7 +94,7 @@ int file_c::read(void *buf, size_t count) const
         logger_error("call read fail:%s", strerror(errno));
         return ERROR;
     }
-    if((ssize_t)bytes != count)
+    if((size_t)bytes != count)
     {
         logger_error("unable to read expected bytes:%ld != %lu", bytes, count);
         return ERROR;
