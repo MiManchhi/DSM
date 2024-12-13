@@ -2,5 +2,9 @@
 .vscode/
 #递归忽略所有构建目录
 src/**/build/
-#忽略日志文件
-bin/*.log
+src/**/build_debug/
+#忽略可执行文件
+bin/release/
+bin/debug/
+!bin/*.md
+!bin/**/*.md
