@@ -7,7 +7,6 @@
 #include <acl-lib/acl_cpp/lib_acl.hpp>
 #include "types.h"
 
-//extern关键字用于声明以下变量在配置文件中定义，在此文件中使用
 //配置信息
 extern char *cfg_gpname;                  //隶属组名
 extern char *cfg_spaths;                  //存储路径表

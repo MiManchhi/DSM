@@ -14,7 +14,7 @@ int cache_c::get(char const *key, acl::string &value) const
 {
     //构造键 --->添加前缀
     acl::string storage_key;
-    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX.c_str(),key);
+    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX,key);
     //检查Redis连接池 -->如果连接池为空打印错误日志
     if(!g_rconns)
     {
@@ -54,7 +54,7 @@ int cache_c::set(char const *key, char const *value, int timeout) const
 {
     //构造键
     acl::string storage_key;
-    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX.c_str(),key);
+    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX,key);
     //检查Redis连接池
     if(!g_rconns)
     {
@@ -87,7 +87,7 @@ int cache_c::del(char const *key) const
 {
     //构造键 --->添加前缀
     acl::string storage_key;
-    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX.c_str(),key);
+    storage_key.format("%s:%s",STORAGE_REDIS_PREFIX,key);
     //检查Redis连接池 -->如果连接池为空打印错误日志
     if(!g_rconns)
     {
