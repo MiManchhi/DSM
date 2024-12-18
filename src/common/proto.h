@@ -77,8 +77,13 @@ constexpr int CMD_STORAGE_REPLY = 102;                                 //存储�
 /*
 优化宏定义，将define用constexpr代替
 define在预处理阶段进行文本替换不做类型检查  不占用存储空间
-constexpr在编译期定义的常量，在编译阶段进行计算，也可定义字面量（const char*）
+constexpr定义的变量必须在编译阶段就可以计算出其值，在编译阶段进行计算，也可定义字面量（const char*）
 constexpr是默认inline的，在编译阶段进行展开，不占用运行时空间，是强类型，进行类型检查，可调试
 
 const定义的常量，在运行时分配存储空间
+
+const 和 constexpr 变量之间的主要区别在于，const 变量的初始化可以推迟到运行时。 constexpr 变量必须在编译时进行初始化。 所有的 constexpr 变量都是 const。
+如果一个变量具有文本类型并且已初始化，则可以使用 constexpr 声明该变量。 If 初始化由构造函数执行，构造函数必须声明为 constexpr。
+当满足以下两个条件时，可以将引用声明为 constexpr：引用的对象由常量表达式初始化，并且在初始化期间所调用的任何隐式转换也均是常数表达式。
+constexpr 变量或函数的所有声明都必须具有 constexpr 说明符。
 */
