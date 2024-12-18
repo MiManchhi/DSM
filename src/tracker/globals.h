@@ -10,7 +10,6 @@
 
 #include "types.h"
 
-//extern关键字用于声明以下变量在配置文件中定义，在此文件中使用
 //配置信息
 extern char* cfg_appids;                  //应用ID表
 extern char* cfg_maddrs;                  //MySQL地址表

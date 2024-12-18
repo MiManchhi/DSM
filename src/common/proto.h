@@ -1,5 +1,5 @@
 //公共模块
-//定义与报文规约相关的宏和数据类型
+//声明与报文规约相关的宏和数据类型
 #pragma once
 #include "types.h"
 
@@ -11,10 +11,10 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-const int BODYLEN_SIZE = 8;                                         //包体长度字节数
-const int COMMAND_SIZE = 1;                                         //命令字节数
-const int STATUS_SIZE = 1;                                          //状态字节数
-const int HEADLEN = (BODYLEN_SIZE + COMMAND_SIZE + STATUS_SIZE);    //包头字节数
+constexpr int BODYLEN_SIZE = 8;                                         //包体长度字节数
+constexpr int COMMAND_SIZE = 1;                                         //命令字节数
+constexpr int STATUS_SIZE = 1;                                          //状态字节数
+constexpr int HEADLEN = (BODYLEN_SIZE + COMMAND_SIZE + STATUS_SIZE);    //包头字节数
 
 /////////////////////////////////////////////////////////////////////////////
 //                                                                         //
@@ -23,8 +23,8 @@ const int HEADLEN = (BODYLEN_SIZE + COMMAND_SIZE + STATUS_SIZE);    //包头字�
 //                                                                         //
 /////////////////////////////////////////////////////////////////////////////
 
-const int ERROR_NUMB_SIZE = 2;                                     //错误号字节数
-const int ERROR_DESC_SIZE = 1024;                                  //错误描述最大字节数（包含空字符）
+constexpr int ERROR_NUMB_SIZE = 2;                                     //错误号字节数
+constexpr int ERROR_DESC_SIZE = 1024;                                  //错误描述最大字节数（包含空字符）
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -34,9 +34,9 @@ const int ERROR_DESC_SIZE = 1024;                                  //错误描�
 //                                                                         //
 /////////////////////////////////////////////////////////////////////////////
 
-const int APPID_SIZE = 16;                                         //应用ID最大字节数（包含空字符）
-const int USERID_SIZE = 256;                                       //用户ID最达字节数（包含空字符）
-const int FILEID_SIZE = 128;                                       //文件ID最大字节数（包含空字符）
+constexpr int APPID_SIZE = 16;                                         //应用ID最大字节数（包含空字符）
+constexpr int USERID_SIZE = 256;                                       //用户ID最达字节数（包含空字符）
+constexpr int FILEID_SIZE = 128;                                       //文件ID最大字节数（包含空字符）
 
 //存储服务器加入包和心跳包
 //使用结构体组织信息 成员均使用char类型，防止内存补齐
@@ -58,18 +58,27 @@ typedef struct storage_beat_body
 
 //命令
 
-const int CMD_TRACKER_JOIN = 10;                                   //存储服务器向跟踪服务器发送加入包
-const int CMD_TRACKER_BEAT = 11;                                   //存储服务器向跟踪服务器发送心跳包
-const int CMD_TRACKER_SADDRS = 12;                                 //客户机从跟踪服务器获取存储服务器地址列表
-const int CMD_TRACKER_GROUPS = 13;                                 //客户机从跟踪服务器获取组列表
+constexpr int CMD_TRACKER_JOIN = 10;                                   //存储服务器向跟踪服务器发送加入包
+constexpr int CMD_TRACKER_BEAT = 11;                                   //存储服务器向跟踪服务器发送心跳包
+constexpr int CMD_TRACKER_SADDRS = 12;                                 //客户机从跟踪服务器获取存储服务器地址列表
+constexpr int CMD_TRACKER_GROUPS = 13;                                 //客户机从跟踪服务器获取组列表
 
-const int CMD_ID_GET = 40;                                         //存储服务器从ID服务器获取ID
+constexpr int CMD_ID_GET = 40;                                         //存储服务器从ID服务器获取ID
 
-const int CMD_STORAGE_UPLOAD = 70;                                 //客户机向存储服务器上传文件
-const int CMD_STORAGE_FILESIZE = 71;                               //客户机向存储服务器询问文件大小
-const int CMD_STORAGE_DOWNLOAD = 72;                               //客户机从存储服务器下载文件
-const int CMD_STORAGE_DELETE = 73;                                 //客户机删除存储服务器上的文件
+constexpr int CMD_STORAGE_UPLOAD = 70;                                 //客户机向存储服务器上传文件
+constexpr int CMD_STORAGE_FILESIZE = 71;                               //客户机向存储服务器询问文件大小
+constexpr int CMD_STORAGE_DOWNLOAD = 72;                               //客户机从存储服务器下载文件
+constexpr int CMD_STORAGE_DELETE = 73;                                 //客户机删除存储服务器上的文件
 
-const int CMD_TRACKER_REPLY = 100;                                 //跟踪服务器应答
-const int CMD_ID_REPLY = 101;                                      //ID服务器应答
-const int CMD_STORAGE_REPLY = 102;                                 //存储服务器应答
+constexpr int CMD_TRACKER_REPLY = 100;                                 //跟踪服务器应答
+constexpr int CMD_ID_REPLY = 101;                                      //ID服务器应答
+constexpr int CMD_STORAGE_REPLY = 102;                                 //存储服务器应答
+
+/*
+优化宏定义，将define用constexpr代替
+define在预处理阶段进行文本替换不做类型检查  不占用存储空间
+constexpr在编译期定义的常量，在编译阶段进行计算，也可定义字面量（const char*）
+constexpr是默认inline的，在编译阶段进行展开，不占用运行时空间，是强类型，进行类型检查，可调试
+
+const定义的常量，在运行时分配存储空间
+*/

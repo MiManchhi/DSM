@@ -1,19 +1,19 @@
 //公共模块
-//定义所有模块都会用到的数据类型和宏
+//声明所有模块都会用到的数据类型和宏
 #pragma once
 
 #include <netinet/in.h>
 #include <string>
 
 //定义函数返回值
-const int OK = 0;             //成功
-const int ERROR = -1;         //本地错误
-const int SOCKET_ERROR = -2;  //套接字通信错误
-const int STATUS_ERROR = -3;  //服务器状态异常
+constexpr int OK = 0;             //成功
+constexpr int ERROR = -1;         //本地错误
+constexpr int SOCKET_ERROR = -2;  //套接字通信错误
+constexpr int STATUS_ERROR = -3;  //服务器状态异常
 
 //缓存相关（redis）
-const std::string TRACKER_REDIS_PREFIX = "tracker";   //跟踪服务器redis前缀
-const std::string STORAGE_REDIS_PREFIX = "storage";   //存储服务器redis前缀
+constexpr const char* TRACKER_REDIS_PREFIX = "tracker";   //跟踪服务器redis前缀
+constexpr const char* STORAGE_REDIS_PREFIX = "storage";   //存储服务器redis前缀
 
 //存储服务器状态
 typedef enum storage_status
@@ -24,10 +24,10 @@ typedef enum storage_status
 }storage_status_t;
 
 //存储服务器加入和信息
-const int STORAGE_VERSION_MAX = 6;       //版本信息最大字符数
-const int STORAGE_GROUPNAME_MAX = 16;    //组名最大字符数
-const int STORAGE_HOSTNAME_MAX = 128;    //主机名最大字符数
-const int STORAGE_ADDR_MAX = 16;         //Ip地址最大字符数
+constexpr int STORAGE_VERSION_MAX = 6;       //版本信息最大字符数
+constexpr int STORAGE_GROUPNAME_MAX = 16;    //组名最大字符数
+constexpr int STORAGE_HOSTNAME_MAX = 128;    //主机名最大字符数
+constexpr int STORAGE_ADDR_MAX = 16;         //Ip地址最大字符数
 //加入信息
 typedef struct storage_join
 {
@@ -52,7 +52,7 @@ typedef struct storage_info
 }storage_info_t;
 
 //键值对
-const int ID_KEY_MAX = 64;
+constexpr int ID_KEY_MAX = 64;
 typedef struct id_pair
 {
     char id_key[ID_KEY_MAX+1];                       //键
@@ -62,5 +62,15 @@ typedef struct id_pair
 
 
 //存储服务器读写磁盘文件缓冲区
-const int STORAGE_RCVWD_SIZE = 512*1024;
-const int STORAGE_RDSND_SIZE = 512*1024;
+constexpr int STORAGE_RCVWD_SIZE = 512*1024;
+constexpr int STORAGE_RDSND_SIZE = 512*1024;
+
+
+/*
+优化宏定义，将define用constexpr代替
+define在预处理阶段进行文本替换不做类型检查  不占用存储空间
+constexpr在编译期定义的常量，在编译阶段进行计算，也可定义字面量（const char*）
+constexpr是默认inline的，在编译阶段进行展开，不占用运行时空间，是强类型，进行类型检查，可调试
+
+const定义的常量，在运行时分配存储空间
+*/
