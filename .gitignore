@@ -6,5 +6,13 @@ src/**/build_debug/
 #忽略可执行文件
 bin/release/
 bin/debug/
-!bin/*.md
 !bin/**/*.md
+#忽略库文件
+lib/*.a
+lib/*.so
+#忽略存储路径下的文件
+data/**/*.*
+#忽略下载路径下的文件
+download/*.*
+#忽略上传路径下的文件
+upload/*.*
