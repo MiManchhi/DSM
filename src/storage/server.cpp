@@ -130,7 +130,8 @@ void server_c::proc_on_exit(void)
         // 销毁跟踪客户机线程
         delete tracker;
     }
-    //销毁Redis连接池
+    m_trackers.clear();
+    // 销毁Redis连接池
     if(g_rconns)
     {
         delete g_rconns;
@@ -159,8 +160,8 @@ bool server_c::thread_on_read(acl::socket_stream *conn)
         else
         {
             logger_error("read fail:%s, from:%s", acl::last_serror(), conn->get_peer());
-            return false;
         }
+        return false;
     }
     // 业务处理
     service_c service;

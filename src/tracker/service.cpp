@@ -501,7 +501,7 @@ int service_c::saddrs_of_group(char const *groupname, std::string &saddrs) const
                     sprintf(saddr,"%s:%d",iter->si_addr,iter->si_port);
                     saddrs += saddr;
                     saddrs += ";";
-                    if(nacts >= 3)
+                    if(++nacts >= 3)
                         break;
                 }
             }
