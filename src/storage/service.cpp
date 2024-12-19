@@ -70,7 +70,7 @@ bool service_c::upload(acl::socket_stream *conn, long long bodylen) const
         return false;
     }
     // 接收包体
-    char body[expectedlen]; //不接收文件内容
+    char body[expectedlen]; //接收文件内容
     if(conn->read(body,expectedlen) < 0)
     {
         logger_error("read fail:%s,expectedlen:%lld, from:%s", acl::last_serror(), expectedlen, conn->get_peer());

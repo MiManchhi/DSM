@@ -72,7 +72,7 @@ int id_c::client(char const *requ, long long resqulen) const
             nrand = (nrand + 1) % nids;
         }
     }
-    if(conn.alive()) //没有连接成功
+    if(!conn.alive()) //没有连接成功
     {
         logger_error("connect id fail, addrs:%s", cfg_iaddrs);
         return -1;

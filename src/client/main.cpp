@@ -63,7 +63,7 @@ std::unordered_map<std::string, int> cmd_index =
 };
 
 //从跟踪服务器获取组列表
-int client_groups(int argc, char *argv[], client_c &client)
+int client_groups(client_c &client)
 {
     std::string groups;
     if(client.groups(groups) != OK)
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     {
     case 0 :
         // 从跟踪服务器获取组列表
-        client_groups(argc, argv, client);
+        client_groups(client);
         break;
     case 1 :
         // 向存储服务器上传文件
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
     default:
         client_c::deinit();
         usage(cmd);
-        break;
+        return -1;
     }
     // 终结化客户机
     client_c::deinit();

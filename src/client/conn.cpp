@@ -51,7 +51,7 @@ int conn_c::saddrs(char const *appid, char const *userid, char const *fileid, st
     //|   8   | 1  | 1  |16+1|包体长度-（16+1）|
     if(result == OK)
     {
-        saddrs = STORAGE_GROUPNAME_MAX + 1;
+        saddrs = body + STORAGE_GROUPNAME_MAX + 1;
     }
     // 失败响应
     //|包体长度|命令|状态|错误号|错误描述|
@@ -205,7 +205,7 @@ int conn_c::upload(char const *appid, char const *userid, char const *fileid, ch
     }
     //发送文件
     long long leftbytes = filesize;  //未发字节数
-    off_t offset;                    // 偏移
+    off_t offset = 0;                    // 偏移
     while (leftbytes)
     {
         long long bytes = std::min(leftbytes, static_cast<long long>(STORAGE_RCVWD_SIZE));
@@ -463,6 +463,7 @@ int conn_c::recvbody(char **body, long long &bodylen)
 {
     //接收包头
     int result = recvhead(bodylen);
+    logger("bodylen: %lld", bodylen);
     // 如果不是本地错误也不是套接字错误并且包体长度非空--->分配包体
     if(result != ERROR && result != SOCKET_ERROR && bodylen)
     {
@@ -473,18 +474,19 @@ int conn_c::recvbody(char **body, long long &bodylen)
             m_errdesc.format("call malloc fail :%s, bodylen:%lld", strerror(errno), bodylen);
             return ERROR;
         }
+        // 接收包体
+        if(m_conn->read(*body,bodylen) < 0)
+        {
+            logger_error("read fail :%s, from:%s", acl::last_serror(), m_conn->get_peer());
+            m_errnumb = -1;
+            m_errdesc.format("read fail :%s, from:%s", acl::last_serror(), m_conn->get_peer());
+            free(*body);
+            *body = NULL;
+            close();
+            return SOCKET_ERROR;
+        }
     }   
-    // 接收包体
-    if(m_conn->read(*body,bodylen) < 0)
-    {
-        logger_error("read fail :%s, from:%s", acl::last_serror(), m_conn->get_peer());
-        m_errnumb = -1;
-        m_errdesc.format("read fail :%s, from:%s", acl::last_serror(), m_conn->get_peer());
-        free(*body);
-        *body = NULL;
-        close();
-        return SOCKET_ERROR;
-    }
+    
     return result;
 }
 // 接收包头--->返回包体长度

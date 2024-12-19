@@ -26,7 +26,7 @@ file_c::~file_c()
 int file_c::open(char const *path, char flag)
 {
     //检查路径
-    if(!path || strlen(path))
+    if(!path || !strlen(path))
     {
         logger_error("path is null");
         return ERROR;

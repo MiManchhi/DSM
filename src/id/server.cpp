@@ -71,8 +71,8 @@ bool server_c::thread_on_read(acl::socket_stream *conn)
         else
         {
             logger_error("read fail:%s, from:%s", acl::last_serror(), conn->get_peer());
-            return false;
         }
+        return false;
     }
     // 业务处理
     service_c service;

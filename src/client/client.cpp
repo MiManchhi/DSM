@@ -116,6 +116,8 @@ int client_c::saddrs(char const *appid, char const *userid, char const *fileid, 
                 break; //连接池里取连接失败，退出本层循环重新获取连接池
             }
             // 从跟踪服务器获取存储服务器地址列表
+            logger("get storage server addresses attempt #%d, appid:%s, userid:%s, fileid:%s", 
+            i + 1, appid, userid, fileid);
             result = tconn->saddrs(appid, userid, fileid, saddrs);
             if(result == SOCKET_ERROR)
             {
@@ -176,6 +178,7 @@ int client_c::groups(std::string &groups)
                 break; //连接池里取连接失败，退出本层循环重新获取连接池
             }
             // 从跟踪服务器获取存储服务器地址列表
+            logger("get groups attempt #%d", i + 1);
             result = tconn->groups(groups);
             if(result == SOCKET_ERROR)
             {
@@ -265,6 +268,8 @@ int client_c::upload(char const *appid, char const *userid, char const *fileid, 
                 break;
             }
             // 向存储服务器上传文件
+            logger("upload attempt #%d, saddr:%s, appid:%s, userid:%s, fileid:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid);
             result = sconn->upload(appid,userid,fileid,filedata,filesize);
             if(result == SOCKET_ERROR)
             {
@@ -352,7 +357,10 @@ int client_c::upload(char const *appid, char const *userid, char const *fileid, 
                 break;
             }
             // 向存储服务器上传文件
+            logger("upload attempt #%d, saddr:%s, appid:%s, userid:%s, fileid:%s, filepath:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid, filepath);
             result = sconn->upload(appid, userid, fileid, filepath);
+
             if(result == SOCKET_ERROR)
             {
                 logger_warn("upload file fail:%s",sconn->errdesc());
@@ -434,6 +442,8 @@ int client_c::filesize(char const *appid, char const *userid, char const *fileid
                 break;
             }
             // 向存储服务器询问文件大小
+            logger("requry filesize #%d, saddr:%s, appid:%s, userid:%s, fileid:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid);
             result = sconn->filesize(appid, userid, fileid, filesize);
             if (result == SOCKET_ERROR)
             {
@@ -515,7 +525,9 @@ int client_c::download(char const *appid, char const *userid, char const *fileid
                 logger_error("storage server connection is null saddr:%s",saddr.c_str());
                 break;
             }
-            // 向存储服务器询问文件大小
+            // 从存储服务器下载文件
+            logger("download file #%d, saddr:%s, appid:%s, userid:%s, fileid:%s, offset:%lld, size:%lld", 
+            i + 1, saddr.c_str(), appid, userid, fileid, offset, size);
             result = sconn->download(appid,userid,fileid,offset,size,filedata,filesize);
             if (result == SOCKET_ERROR)
             {
@@ -597,7 +609,9 @@ int client_c::del(char const *appid, char const *userid, char const *fileid)
                 logger_error("storage server connection is null saddr:%s",saddr.c_str());
                 break;
             }
-            // 向存储服务器询问文件大小
+            // 删除存储服务器上的文件
+            logger("delete file #%d, saddr:%s, appid:%s, userid:%s, fileid:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid);
             result = sconn->del(appid,userid,fileid);
             if (result == SOCKET_ERROR)
             {
