@@ -1,19 +1,18 @@
-#忽略vscode配置文件
 .vscode/
-#递归忽略所有构建目录
+# 递归忽略所有构建目录
 src/**/build/
 src/**/build_debug/
-#忽略可执行文件
+# 忽略可执行文件
 bin/release/
 bin/debug/
 !bin/**/*.md
-#忽略库文件
+# 忽略库文件
 lib/*.a
 lib/*.so
-#忽略存储路径下的文件
-data/**/*.*
-data/**/*
-#忽略下载路径下的文件
+# 忽略存储路径下的文件，但保留 .md 文件
+data/*
+!data/**/*.md
+# 忽略下载路径下的文件
 download/*.*
-#忽略上传路径下的文件
+# 忽略上传路径下的文件
 upload/*.*
