@@ -10,6 +10,8 @@ constexpr int OK = 0;             //成功
 constexpr int ERROR = -1;         //本地错误
 constexpr int SOCKET_ERROR = -2;  //套接字通信错误
 constexpr int STATUS_ERROR = -3;  //服务器状态异常
+constexpr int KEYNEGO_ERROR = -4; //密钥协商错误
+constexpr int SIGN_ERROR = -5;    //验证签名错误
 
 //缓存相关（redis）
 constexpr const char* TRACKER_REDIS_PREFIX = "tracker";   //跟踪服务器redis前缀

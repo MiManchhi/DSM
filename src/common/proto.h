@@ -38,6 +38,36 @@ constexpr int APPID_SIZE = 16;                                         //应用I
 constexpr int USERID_SIZE = 256;                                       //用户ID最达字节数（包含空字符）
 constexpr int FILEID_SIZE = 128;                                       //文件ID最大字节数（包含空字符）
 
+
+/////////////////////////////////////////////////////////////////////////////
+//                                                                         //
+//    | 包体长度 | 命令 | 状态 | 应用ID | 用户ID | 公钥长度 |    公钥   |     //
+//    |    8    |  1   |  1   | 16    |   256  |   8     | 256 | 512|      //
+//                                                                         //
+/////////////////////////////////////////////////////////////////////////////
+
+constexpr int PUBLICKEY_SIZE = 8;                                      //公钥长度
+constexpr int PUBLICKEY_MAX_SIZE = 512;                                //公钥最大长度
+ 
+/////////////////////////////////////////////////////////////////////////////
+//                                                                         //
+//    | 包体长度 | 命令 | 状态 | 密钥长度  |   密钥       |                   //
+//    |    8    |  1   |  1   |    8    |  16|24|32    |                   //
+//                                                                         //
+/////////////////////////////////////////////////////////////////////////////
+
+constexpr int KEY_SIZE = 8;                                            //密钥大小
+constexpr int KEY = 32;                                                //密钥大小
+
+/////////////////////////////////////////////////////////////////////////////
+//                                                                         //
+//    | 包体长度 | 命令 | 状态 | 应用ID | 用户ID |      目标主机      |      //
+//    |    8    |  1   |  1   | 16    |   256  | ipv4（6）ipv6（18）|       //
+//                                                                         //
+/////////////////////////////////////////////////////////////////////////////
+
+constexpr int TARGETHOST_SIZE = 6;
+
 //存储服务器加入包和心跳包
 //使用结构体组织信息 成员均使用char类型，防止内存补齐
 typedef struct storage_join_body
@@ -73,6 +103,10 @@ constexpr int CMD_STORAGE_DELETE = 73;                                 //客户�
 constexpr int CMD_TRACKER_REPLY = 100;                                 //跟踪服务器应答
 constexpr int CMD_ID_REPLY = 101;                                      //ID服务器应答
 constexpr int CMD_STORAGE_REPLY = 102;                                 //存储服务器应答
+constexpr int CMD_KEYNEGO_SERVEER_REPLY = 103;                         //密钥协商服务器应答
+
+constexpr int CMD_REGISTER_PUNLICKEY = 60;                             //公钥注册请求
+constexpr int CMD_NEGOKEY = 61;                                        //密钥协商请求
 
 /*
 优化宏定义，将define用constexpr代替
