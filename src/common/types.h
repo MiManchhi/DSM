@@ -16,6 +16,7 @@ constexpr int SIGN_ERROR = -5;    //验证签名错误
 //缓存相关（redis）
 constexpr const char* TRACKER_REDIS_PREFIX = "tracker";   //跟踪服务器redis前缀
 constexpr const char* STORAGE_REDIS_PREFIX = "storage";   //存储服务器redis前缀
+constexpr const char *KEYNEGO_REDIS_PREFIX = "keynego";   //密钥协商服务器redis前缀
 
 //存储服务器状态
 typedef enum storage_status
