@@ -16,3 +16,6 @@ data/*
 download/*.*
 # 忽略上传路径下的文件
 upload/*.*
+# 忽略CMake构建目录
+src/cmake_build
+src/**/cmake_build
