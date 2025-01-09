@@ -39,7 +39,6 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(EXECUTABLE_OUTPUT_PATH "${PROJECT_ROOT}/bin/debug")
 endif()
 
-# 编译为可执行文件，生成 http 而非 id
 add_executable(http ${ID_SOURCES})
 
 # 设置包含路径
