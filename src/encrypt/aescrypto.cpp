@@ -12,6 +12,25 @@ AesCrypto::AesCrypto(const std::string& key) {
 // 析构函数：释放资源
 AesCrypto::~AesCrypto() {}
 
+int AesCrypto::generateKey(int keyLength, std::string& key) {
+    if (keyLength != 16 && keyLength != 24 && keyLength != 32) {
+        return ERROR;  // 不支持的密钥长度
+    }
+
+    // 为密钥分配空间
+    unsigned char generatedKey[keyLength];
+
+    // 使用 OpenSSL 的 RAND_bytes 生成随机数
+    if (RAND_bytes(generatedKey, keyLength) != 1) {
+        return ERROR;  // 如果生成失败，则返回错误
+    }
+
+    // 将生成的密钥转为 std::string 类型，并返回
+    key.assign(reinterpret_cast<char*>(generatedKey), keyLength);
+    return OK;
+}
+
+
 // 加密函数：使用 AES-CBC 模式加密明文
 std::string AesCrypto::aesCBCEncrypt(const std::string& plaintext) {
     // 创建加密上下文

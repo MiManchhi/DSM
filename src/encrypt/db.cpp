@@ -94,11 +94,11 @@ int db_c::ClientPublicKey(const char *userid, std::string &publicKey) const
  * @param publicKey - 客户端公钥
  * @return OK 设置成功 ERROR 设置失败
 */
-int db_c::setClientPublicKey(const char *userid, const std::string publicKey, const long keylen) const
+int db_c::setClientPublicKey(const char *userid, const std::string publicKey, const long long keylen) const
 {
     //插入记录
     acl::string sql;
-    sql.format("INSERT INTO clientkeys SET UserID='%s', PublicKey='%s', KeyLength=%ld;", userid, publicKey.c_str(), keylen);
+    sql.format("INSERT INTO clientkeys SET UserID='%s', PublicKey='%s', KeyLength=%lld;", userid, publicKey.c_str(), keylen);
     if(mysql_query(m_mysql,sql.c_str()))
     {
         logger_error("insert database fail:%s, sql:%s", mysql_error(m_mysql), sql.c_str());
@@ -172,11 +172,11 @@ int db_c::ServerPublicKey(const char *serverid, std::string &publicKey) const
  * @param publicKey - 客户端公钥
  * @return OK 设置成功 ERROR 设置失败
 */
-int db_c::setServerPublicKey(const char *serverid, const std::string publicKey, const long keylen) const
+int db_c::setServerPublicKey(const char *serverid, const std::string publicKey, const long long keylen) const
 {
     //插入记录
     acl::string sql;
-    sql.format("INSERT INTO clientkeys SET ServerID='%s', PublicKey='%s', KeyLength=%ld;", serverid, publicKey.c_str(), keylen);
+    sql.format("INSERT INTO clientkeys SET ServerID='%s', PublicKey='%s', KeyLength=%lld;", serverid, publicKey.c_str(), keylen);
     if(mysql_query(m_mysql,sql.c_str()))
     {
         logger_error("insert database fail:%s, sql:%s", mysql_error(m_mysql), sql.c_str());

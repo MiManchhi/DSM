@@ -5,6 +5,7 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/rand.h>
+#include "types.h"
 
 /**
  * AesCrypto 类
@@ -39,6 +40,14 @@ public:
      * @return 解密后的明文字符串。
      */
     std::string aesCBCDecrypt(const std::string& ciphertext);
+
+    /**
+     * 生成对称加密密钥
+     * @param keyLength - 密钥长度 -只能是16，24，32
+     * @param key - 返回参数 生成的密钥
+     * @return OK 生成成功， ERROR生成失败
+     */
+    static int generateKey(int keyLength, std::string &key);
 
 private:
     /**

@@ -25,6 +25,12 @@ public:
      * @param isPrivate 是否为私钥，true 为私钥，false 为公钥
      */
     RsaCrypto(std::string fileName, bool isPrivate = true);
+    /**
+     * @brief 构造函数，直接通过密钥字符串初始化公钥或私钥
+     * @param keystr 密钥字符串
+     * @param isPrivate 是否为私钥，true 为私钥，false 为公钥
+     */
+    RsaCrypto(const char* keystr, bool isPrivate = true);
 
     /**
      * @brief 析构函数，释放密钥对资源

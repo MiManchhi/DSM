@@ -21,6 +21,11 @@ RsaCrypto::RsaCrypto(std::string fileName, bool isPrivate) : m_keyPair(nullptr)
     }
 }
 
+RsaCrypto::RsaCrypto(const char* keystr, bool isPrivate/*= true*/) : m_keyPair(nullptr)
+{
+    parseKeyString(keystr, isPrivate); 
+}
+
 RsaCrypto::~RsaCrypto()
 {
     if (m_keyPair)
