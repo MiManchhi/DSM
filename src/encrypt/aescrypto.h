@@ -1,26 +1,25 @@
 #pragma once
-#include <string>
-#include <stdexcept>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
-#include <openssl/rand.h>
 #include "types.h"
+
 
 /**
  * AesCrypto 类
- * 该类实现了基于 AES-256-CBC 模式的加密和解密功能。
- * - 支持 16 字节、24 字节、32 字节的密钥。
- * - 加密后的数据使用 Base64 编码，方便存储和传输。
- * - 内部使用 OpenSSL 的 EVP 高级加密接口，保证兼容性和安全性。
+ * 支持 AES-256-CBC 加密和解密，加密后的数据使用 Base64 编码。
+ * 适用于文本、文件和分块数据的加密和解密。
+ * 函数参数仅用于标记执行成功（OK 或 ERROR），输入输出使用 char* 或 char**。
  */
 class AesCrypto {
 public:
     /**
      * 构造函数
      * @param key - AES 密钥，必须是 16、24 或 32 字节长。
+     * @param keyLen - 密钥长度。
      */
-    AesCrypto(const std::string& key);
+    AesCrypto(const char* key, int keyLen);
 
     /**
      * 析构函数
@@ -28,42 +27,55 @@ public:
     ~AesCrypto();
 
     /**
-     * AES-CBC 加密
-     * @param plaintext - 待加密的明文字符串。
-     * @return 加密后的密文字符串（Base64 编码）。
+     * 加密数据并进行 Base64 编码
+     * @param plaintext - 待加密的数据。
+     * @param plaintextLen - 待加密数据的长度。
+     * @param ciphertext - 输出参数，加密后的数据（Base64 编码）。
+     * @param ciphertextLen - 输出参数，加密后数据的长度。
+     * @return OK 加密成功，ERROR 加密失败。
      */
-    std::string aesCBCEncrypt(const std::string& plaintext);
+    int encrypt(const char* plaintext, int plaintextLen, char*& ciphertext, int& ciphertextLen);
 
     /**
-     * AES-CBC 解密
-     * @param ciphertext - 待解密的密文字符串（Base64 编码）。
-     * @return 解密后的明文字符串。
+     * 解密 Base64 编码的数据
+     * @param ciphertext - Base64 编码的加密数据。
+     * @param ciphertextLen - 加密数据的长度。
+     * @param plaintext - 输出参数，解密后的数据。
+     * @param plaintextLen - 输出参数，解密后数据的长度。
+     * @return OK 解密成功，ERROR 解密失败。
      */
-    std::string aesCBCDecrypt(const std::string& ciphertext);
+    int decrypt(const char* ciphertext, int ciphertextLen, char*& plaintext, int& plaintextLen);
 
     /**
      * 生成对称加密密钥
-     * @param keyLength - 密钥长度 -只能是16，24，32
-     * @param key - 返回参数 生成的密钥
-     * @return OK 生成成功， ERROR生成失败
+     * @param keyLength - 密钥长度（16、24 或 32）。
+     * @param key - 输出参数，生成的密钥。
+     * @param keyLen - 输出参数，密钥的长度。
+     * @return OK 生成成功，ERROR 生成失败。
      */
-    static int generateKey(int keyLength, std::string &key);
+    static int generateKey(int keyLength, char*& key, int& keyLen);
 
 private:
     /**
      * 将二进制数据转换为 Base64 编码字符串。
-     * @param str - 待编码的数据。
-     * @param len - 数据长度。
-     * @return Base64 编码后的字符串。
+     * @param data - 待编码的数据。
+     * @param dataLen - 数据长度。
+     * @param base64Text - 输出参数，Base64 编码后的字符串。
+     * @param base64Len - 输出参数，Base64 编码后的长度。
+     * @return OK 编码成功，ERROR 编码失败。
      */
-    std::string toBase64(const unsigned char* str, int len);
+    int toBase64(const unsigned char* data, int dataLen, char*& base64Text, int& base64Len);
 
     /**
      * 将 Base64 编码的字符串解码为二进制数据。
-     * @param str - Base64 编码的字符串。
-     * @return 解码后的二进制数据。
+     * @param base64Text - Base64 编码的字符串。
+     * @param base64Len - Base64 编码的长度。
+     * @param data - 输出参数，解码后的二进制数据。
+     * @param dataLen - 输出参数，解码后的数据长度。
+     * @return OK 解码成功，ERROR 解码失败。
      */
-    std::string fromBase64(const std::string& str);
+    int fromBase64(const char* base64Text, int base64Len, unsigned char*& data, int& dataLen);
 
-    std::string m_key; // AES 密钥
+    char* m_key; // AES 密钥
+    int m_keyLen; // 密钥长度
 };

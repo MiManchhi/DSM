@@ -1,157 +1,185 @@
-#include <cstring>
 #include "aescrypto.h"
+#include <cstring>
+#include <stdexcept>
 
 // 构造函数：初始化 AES 密钥
-AesCrypto::AesCrypto(const std::string& key) {
-    if (key.size() != 16 && key.size() != 24 && key.size() != 32) {
+AesCrypto::AesCrypto(const char* key, int keyLen) {
+    if (keyLen != 16 && keyLen != 24 && keyLen != 32) {
         throw std::invalid_argument("AES 密钥长度必须是 16、24 或 32 字节。");
     }
-    m_key = key;
+    m_key = new char[keyLen];
+    memcpy(m_key, key, keyLen);
+    m_keyLen = keyLen;
 }
 
 // 析构函数：释放资源
-AesCrypto::~AesCrypto() {}
-
-int AesCrypto::generateKey(int keyLength, std::string& key) {
-    if (keyLength != 16 && keyLength != 24 && keyLength != 32) {
-        return ERROR;  // 不支持的密钥长度
-    }
-
-    // 为密钥分配空间
-    unsigned char generatedKey[keyLength];
-
-    // 使用 OpenSSL 的 RAND_bytes 生成随机数
-    if (RAND_bytes(generatedKey, keyLength) != 1) {
-        return ERROR;  // 如果生成失败，则返回错误
-    }
-
-    // 将生成的密钥转为 std::string 类型，并返回
-    key.assign(reinterpret_cast<char*>(generatedKey), keyLength);
-    return OK;
+AesCrypto::~AesCrypto() {
+    delete[] m_key;
 }
 
-
-// 加密函数：使用 AES-CBC 模式加密明文
-std::string AesCrypto::aesCBCEncrypt(const std::string& plaintext) {
+// 加密数据并进行 Base64 编码
+int AesCrypto::encrypt(const char* plaintext, int plaintextLen, char*& ciphertext, int& ciphertextLen) {
     // 创建加密上下文
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        throw std::runtime_error("创建 EVP_CIPHER_CTX 失败。");
+        return ERROR;
     }
 
     // 生成随机 IV（初始化向量）
     unsigned char iv[16];
     if (!RAND_bytes(iv, sizeof(iv))) {
         EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("生成随机 IV 失败。");
+        return ERROR;
     }
 
     // 初始化加密操作
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (unsigned char*)m_key.data(), iv) != 1) {
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (unsigned char*)m_key, iv) != 1) {
         EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("初始化加密失败。");
+        return ERROR;
     }
 
     // 分配足够的缓冲区存储加密结果
-    std::string ciphertext;
-    ciphertext.resize(plaintext.size() + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
-    int out_len1 = 0, out_len2 = 0;
+    int outLen1 = 0, outLen2 = 0;
+    int cipherLen = plaintextLen + EVP_CIPHER_block_size(EVP_aes_256_cbc());
+    unsigned char* encryptedData = new unsigned char[cipherLen];
 
     // 加密数据
-    if (EVP_EncryptUpdate(ctx, (unsigned char*)ciphertext.data(), &out_len1,
-                          (unsigned char*)plaintext.data(), plaintext.size()) != 1 ||
-        EVP_EncryptFinal_ex(ctx, (unsigned char*)ciphertext.data() + out_len1, &out_len2) != 1) {
+    if (EVP_EncryptUpdate(ctx, encryptedData, &outLen1, (unsigned char*)plaintext, plaintextLen) != 1 ||
+        EVP_EncryptFinal_ex(ctx, encryptedData + outLen1, &outLen2) != 1) {
+        delete[] encryptedData;
         EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("加密数据失败。");
+        return ERROR;
     }
 
-    ciphertext.resize(out_len1 + out_len2);
+    cipherLen = outLen1 + outLen2;
 
     // 将 IV 和密文拼接
-    std::string encryptedData((char*)iv, sizeof(iv));
-    encryptedData += ciphertext;
+    unsigned char* combinedData = new unsigned char[cipherLen + 16];
+    memcpy(combinedData, iv, 16);
+    memcpy(combinedData + 16, encryptedData, cipherLen);
+    delete[] encryptedData;
 
     // 对加密数据进行 Base64 编码
+    int base64Len = 0;
+    char* base64Text = nullptr;
+    if (toBase64(combinedData, cipherLen + 16, base64Text, base64Len) != OK) {
+        delete[] combinedData;
+        EVP_CIPHER_CTX_free(ctx);
+        return ERROR;
+    }
+
+    ciphertext = base64Text;
+    ciphertextLen = base64Len;
+
+    delete[] combinedData;
     EVP_CIPHER_CTX_free(ctx);
-    return toBase64((unsigned char*)encryptedData.data(), encryptedData.size());
+    return OK;
 }
 
-// 解密函数：使用 AES-CBC 模式解密密文
-std::string AesCrypto::aesCBCDecrypt(const std::string& ciphertext) {
+// 解密 Base64 编码的数据
+int AesCrypto::decrypt(const char* ciphertext, int ciphertextLen, char*& plaintext, int& plaintextLen) {
     // Base64 解码
-    std::string decodedData = fromBase64(ciphertext);
+    unsigned char* combinedData = nullptr;
+    int combinedLen = 0;
+    if (fromBase64(ciphertext, ciphertextLen, combinedData, combinedLen) != OK) {
+        return ERROR;
+    }
 
     // 提取 IV 和密文
-    if (decodedData.size() < 16) {
-        throw std::invalid_argument("密文长度不足，无法提取 IV。");
+    if (combinedLen < 16) {
+        delete[] combinedData;
+        return ERROR;
     }
     unsigned char iv[16];
-    memcpy(iv, decodedData.data(), sizeof(iv));
-    std::string encryptedText = decodedData.substr(sizeof(iv));
+    memcpy(iv, combinedData, 16);
+    unsigned char* encryptedData = combinedData + 16;
+    int encryptedLen = combinedLen - 16;
 
     // 创建解密上下文
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        throw std::runtime_error("创建 EVP_CIPHER_CTX 失败。");
+        delete[] combinedData;
+        return ERROR;
     }
 
     // 初始化解密操作
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (unsigned char*)m_key.data(), iv) != 1) {
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, (unsigned char*)m_key, iv) != 1) {
+        delete[] combinedData;
         EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("初始化解密失败。");
+        return ERROR;
     }
 
     // 分配足够的缓冲区存储解密结果
-    std::string plaintext;
-    plaintext.resize(encryptedText.size());
-    int out_len1 = 0, out_len2 = 0;
-
-    // 解密数据
-    if (EVP_DecryptUpdate(ctx, (unsigned char*)plaintext.data(), &out_len1,
-                          (unsigned char*)encryptedText.data(), encryptedText.size()) != 1 ||
-        EVP_DecryptFinal_ex(ctx, (unsigned char*)plaintext.data() + out_len1, &out_len2) != 1) {
+    int outLen1 = 0, outLen2 = 0;
+    plaintext = new char[encryptedLen];
+    if (EVP_DecryptUpdate(ctx, (unsigned char*)plaintext, &outLen1, encryptedData, encryptedLen) != 1 ||
+        EVP_DecryptFinal_ex(ctx, (unsigned char*)(plaintext + outLen1), &outLen2) != 1) {
+        delete[] combinedData;
+        delete[] plaintext;
         EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("解密数据失败。");
+        return ERROR;
     }
 
-    plaintext.resize(out_len1 + out_len2);
-    EVP_CIPHER_CTX_free(ctx);
+    plaintextLen = outLen1 + outLen2;
+    plaintext[plaintextLen] = '\0'; // 添加字符串结束符
 
-    return plaintext;
+    delete[] combinedData;
+    EVP_CIPHER_CTX_free(ctx);
+    return OK;
+}
+
+// 生成对称加密密钥
+int AesCrypto::generateKey(int keyLength, char*& key, int& keyLen) {
+    if (keyLength != 16 && keyLength != 24 && keyLength != 32) {
+        return ERROR;
+    }
+
+    // 为密钥分配空间
+    key = new char[keyLength];
+    if (RAND_bytes((unsigned char*)key, keyLength) != 1) {
+        delete[] key;
+        return ERROR;
+    }
+
+    keyLen = keyLength;
+    return OK;
 }
 
 // 将二进制数据转换为 Base64 编码字符串
-std::string AesCrypto::toBase64(const unsigned char* str, int len) {
+int AesCrypto::toBase64(const unsigned char* data, int dataLen, char*& base64Text, int& base64Len) {
     BIO* mem = BIO_new(BIO_s_mem());
     BIO* b64 = BIO_new(BIO_f_base64());
     BIO_push(b64, mem);
 
-    BIO_write(b64, str, len);
+    BIO_write(b64, data, dataLen);
     BIO_flush(b64);
 
     BUF_MEM* bufferPtr;
     BIO_get_mem_ptr(b64, &bufferPtr);
 
-    std::string result(bufferPtr->data, bufferPtr->length - 1); // 去掉最后的换行符
+    base64Text = new char[bufferPtr->length];
+    memcpy(base64Text, bufferPtr->data, bufferPtr->length - 1); // 去掉最后的换行符
+    base64Text[bufferPtr->length - 1] = '\0'; // 添加字符串结束符
+    base64Len = bufferPtr->length - 1;
+
     BIO_free_all(b64);
-    return result;
+    return OK;
 }
 
 // 将 Base64 编码的字符串解码为二进制数据
-std::string AesCrypto::fromBase64(const std::string& str) {
+int AesCrypto::fromBase64(const char* base64Text, int base64Len, unsigned char*& data, int& dataLen) {
     BIO* b64 = BIO_new(BIO_f_base64());
-    BIO* mem = BIO_new_mem_buf(str.data(), str.size());
+    BIO* mem = BIO_new_mem_buf(base64Text, base64Len);
     BIO_push(b64, mem);
 
-    std::string result;
-    result.resize(str.size());
-    int decodedLen = BIO_read(b64, result.data(), result.size());
-    if (decodedLen < 0) {
+    data = new unsigned char[base64Len];
+    dataLen = BIO_read(b64, data, base64Len);
+    if (dataLen < 0) {
+        delete[] data;
         BIO_free_all(b64);
-        throw std::runtime_error("Base64 解码失败。");
+        return ERROR;
     }
 
-    result.resize(decodedLen);
     BIO_free_all(b64);
-    return result;
+    return OK;
 }

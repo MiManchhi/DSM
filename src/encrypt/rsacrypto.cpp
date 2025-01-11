@@ -9,21 +9,23 @@
 
 RsaCrypto::RsaCrypto() : m_keyPair(nullptr) {}
 
-RsaCrypto::RsaCrypto(std::string fileName, bool isPrivate) : m_keyPair(nullptr)
+RsaCrypto::RsaCrypto(const char* key, bool isPrivate, bool isFile) : m_keyPair(nullptr)
 {
-    if (isPrivate)
+    if (isFile)
     {
-        initPrivateKey(fileName);
+        if (isPrivate)
+        {
+            initPrivateKey(key);
+        }
+        else
+        {
+            initPublicKey(key);
+        }
     }
     else
     {
-        initPublicKey(fileName);
+        parseKeyString(key, !isPrivate);
     }
-}
-
-RsaCrypto::RsaCrypto(const char* keystr, bool isPrivate/*= true*/) : m_keyPair(nullptr)
-{
-    parseKeyString(keystr, isPrivate); 
 }
 
 RsaCrypto::~RsaCrypto()
@@ -34,9 +36,9 @@ RsaCrypto::~RsaCrypto()
     }
 }
 
-int RsaCrypto::parseKeyString(const std::string &keystr, bool isPublic)
+int RsaCrypto::parseKeyString(const char* keystr, bool isPublic)
 {
-    BIO *bio = BIO_new_mem_buf(keystr.data(), keystr.size());
+    BIO *bio = BIO_new_mem_buf(keystr, -1);
     if (isPublic)
     {
         m_keyPair = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
@@ -50,165 +52,212 @@ int RsaCrypto::parseKeyString(const std::string &keystr, bool isPublic)
     return m_keyPair ? OK : ERROR;
 }
 
-int RsaCrypto::generateRsakey(int bits, const std::string &pub, const std::string &pri) {
-    // 创建上下文对象
+int RsaCrypto::generateRsakey(int bits, const char* pub, const char* pri) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
     if (!ctx) {
-        return ERROR; // 创建上下文失败
+        return ERROR;
     }
 
-    // 初始化密钥生成
     if (EVP_PKEY_keygen_init(ctx) <= 0) {
         EVP_PKEY_CTX_free(ctx);
-        return ERROR; // 初始化失败
+        return ERROR;
     }
 
-    // 设置密钥长度
     if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) <= 0) {
         EVP_PKEY_CTX_free(ctx);
-        return ERROR; // 设置密钥长度失败
+        return ERROR;
     }
 
-    // 生成密钥对
     EVP_PKEY *pkey = nullptr;
     if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
         EVP_PKEY_CTX_free(ctx);
-        return ERROR; // 密钥生成失败
+        return ERROR;
     }
     EVP_PKEY_CTX_free(ctx);
 
-    // 将公钥写入文件
-    FILE *pubFile = fopen(pub.c_str(), "wb");
+    FILE *pubFile = fopen(pub, "wb");
     if (!pubFile) {
         EVP_PKEY_free(pkey);
-        return ERROR; // 打开公钥文件失败
+        return ERROR;
     }
     if (PEM_write_PUBKEY(pubFile, pkey) <= 0) {
         fclose(pubFile);
         EVP_PKEY_free(pkey);
-        return ERROR; // 写入公钥失败
+        return ERROR;
     }
     fclose(pubFile);
 
-    // 将私钥写入文件
-    FILE *priFile = fopen(pri.c_str(), "wb");
+    FILE *priFile = fopen(pri, "wb");
     if (!priFile) {
         EVP_PKEY_free(pkey);
-        return ERROR; // 打开私钥文件失败
+        return ERROR;
     }
     if (PEM_write_PrivateKey(priFile, pkey, nullptr, nullptr, 0, nullptr, nullptr) <= 0) {
         fclose(priFile);
         EVP_PKEY_free(pkey);
-        return ERROR; // 写入私钥失败
+        return ERROR;
     }
     fclose(priFile);
 
     EVP_PKEY_free(pkey);
-    return OK; // 密钥生成成功
+    return OK;
 }
 
-
-int RsaCrypto::rsaPubKeyEncrypt(const std::string &data, std::string &encData)
+int RsaCrypto::rsaPubKeyEncrypt(const char* data, int dataLen, char** encData)
 {
+    if (!data || dataLen <= 0 || !encData) {
+        return ERROR;
+    }
+
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(m_keyPair, nullptr);
-    if (!ctx || EVP_PKEY_encrypt_init(ctx) <= 0)
-    {
+    if (!ctx || EVP_PKEY_encrypt_init(ctx) <= 0) {
+        if (ctx) EVP_PKEY_CTX_free(ctx);
         return ERROR;
     }
 
     size_t outLen;
-    EVP_PKEY_encrypt(ctx, nullptr, &outLen, reinterpret_cast<const unsigned char *>(data.data()), data.size());
-
-    std::vector<unsigned char> outBuf(outLen);
-    if (EVP_PKEY_encrypt(ctx, outBuf.data(), &outLen, reinterpret_cast<const unsigned char *>(data.data()), data.size()) <= 0)
-    {
+    if (EVP_PKEY_encrypt(ctx, nullptr, &outLen, reinterpret_cast<const unsigned char *>(data), dataLen) <= 0) {
         EVP_PKEY_CTX_free(ctx);
         return ERROR;
     }
 
-    encData.assign(outBuf.begin(), outBuf.end());
+    std::vector<unsigned char> outBuf(outLen);
+    if (EVP_PKEY_encrypt(ctx, outBuf.data(), &outLen, reinterpret_cast<const unsigned char *>(data), dataLen) <= 0) {
+        EVP_PKEY_CTX_free(ctx);
+        return ERROR;
+    }
+
     EVP_PKEY_CTX_free(ctx);
+
+    // 对加密后的数据进行 Base64 编码
+    if (toBase64(reinterpret_cast<const char *>(outBuf.data()), outLen, encData) != OK) {
+        return ERROR;
+    }
+
     return OK;
 }
 
-int RsaCrypto::rsaPriKeyDecrypt(const std::string &encData, std::string &data)
+int RsaCrypto::rsaPriKeyDecrypt(const char* encData, char** data, int& dataLen)
 {
+    if (!encData || !data) {
+        return ERROR;
+    }
+
+    // 对加密数据进行 Base64 解码
+    char* decodedEncData = nullptr;
+    int decodedLen = 0;
+    if (fromBase64(encData, &decodedEncData, decodedLen) != OK) {
+        return ERROR;
+    }
+
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(m_keyPair, nullptr);
-    if (!ctx || EVP_PKEY_decrypt_init(ctx) <= 0)
-    {
+    if (!ctx || EVP_PKEY_decrypt_init(ctx) <= 0) {
+        delete[] decodedEncData;
         return ERROR;
     }
 
     size_t outLen;
-    EVP_PKEY_decrypt(ctx, nullptr, &outLen, reinterpret_cast<const unsigned char *>(encData.data()), encData.size());
-
-    std::vector<unsigned char> outBuf(outLen);
-    if (EVP_PKEY_decrypt(ctx, outBuf.data(), &outLen, reinterpret_cast<const unsigned char *>(encData.data()), encData.size()) <= 0)
-    {
+    if (EVP_PKEY_decrypt(ctx, nullptr, &outLen, reinterpret_cast<const unsigned char *>(decodedEncData), decodedLen) <= 0) {
         EVP_PKEY_CTX_free(ctx);
+        delete[] decodedEncData;
         return ERROR;
     }
 
-    data.assign(outBuf.begin(), outBuf.end());
+    *data = new char[outLen + 1]; // +1 用于字符串结束符
+    if (EVP_PKEY_decrypt(ctx, reinterpret_cast<unsigned char *>(*data), &outLen, reinterpret_cast<const unsigned char *>(decodedEncData), decodedLen) <= 0) {
+        EVP_PKEY_CTX_free(ctx);
+        delete[] decodedEncData;
+        delete[] *data;
+        *data = nullptr;
+        return ERROR;
+    }
+
+    (*data)[outLen] = '\0'; // 添加字符串结束符
+    dataLen = static_cast<int>(outLen);
     EVP_PKEY_CTX_free(ctx);
+    delete[] decodedEncData;
     return OK;
 }
 
-int RsaCrypto::rsaSign(const std::string &data, std::string &signData, SignLevel level)
+int RsaCrypto::rsaSign(const char* data, int dataLen, char** signData, SignLevel level)
 {
+    if (!data || dataLen <= 0 || !signData) {
+        return ERROR;
+    }
+
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    if (!ctx || EVP_DigestSignInit(ctx, nullptr, EVP_get_digestbynid(level), nullptr, m_keyPair) <= 0)
-    {
+    if (!ctx || EVP_DigestSignInit(ctx, nullptr, EVP_get_digestbynid(level), nullptr, m_keyPair) <= 0) {
+        if (ctx) EVP_MD_CTX_free(ctx);
         return ERROR;
     }
 
     size_t sigLen;
-    EVP_DigestSign(ctx, nullptr, &sigLen, reinterpret_cast<const unsigned char *>(data.data()), data.size());
+    if (EVP_DigestSign(ctx, nullptr, &sigLen, reinterpret_cast<const unsigned char *>(data), dataLen) <= 0) {
+        EVP_MD_CTX_free(ctx);
+        return ERROR;
+    }
 
     std::vector<unsigned char> sigBuf(sigLen);
-    if (EVP_DigestSign(ctx, sigBuf.data(), &sigLen, reinterpret_cast<const unsigned char *>(data.data()), data.size()) <= 0)
-    {
+    if (EVP_DigestSign(ctx, sigBuf.data(), &sigLen, reinterpret_cast<const unsigned char *>(data), dataLen) <= 0) {
         EVP_MD_CTX_free(ctx);
         return ERROR;
     }
 
     EVP_MD_CTX_free(ctx);
-    return toBase64(reinterpret_cast<const char *>(sigBuf.data()), sigLen, signData);
+
+    // 对签名后的数据进行 Base64 编码
+    if (toBase64(reinterpret_cast<const char *>(sigBuf.data()), sigLen, signData) != OK) {
+        return ERROR;
+    }
+
+    return OK;
 }
 
-int RsaCrypto::rsaVerify(const std::string &data, const std::string &signData, bool &isValid, SignLevel level)
+int RsaCrypto::rsaVerify(const char* data, int dataLen, const char* signData, bool &isValid, SignLevel level)
 {
-    std::string decodedSign;
-    if (fromBase64(signData, decodedSign) != OK)
-    {
+    if (!data || dataLen <= 0 || !signData) {
+        return ERROR;
+    }
+
+    // 对签名数据进行 Base64 解码
+    char* decodedSign = nullptr;
+    int decodedLen = 0;
+    if (fromBase64(signData, &decodedSign, decodedLen) != OK) {
         return ERROR;
     }
 
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    if (!ctx || EVP_DigestVerifyInit(ctx, nullptr, EVP_get_digestbynid(level), nullptr, m_keyPair) <= 0)
-    {
+    if (!ctx || EVP_DigestVerifyInit(ctx, nullptr, EVP_get_digestbynid(level), nullptr, m_keyPair) <= 0) {
         EVP_MD_CTX_free(ctx);
+        delete[] decodedSign;
         return ERROR;
     }
 
     int ret = EVP_DigestVerify(ctx,
-                               reinterpret_cast<const unsigned char *>(decodedSign.data()),
-                               decodedSign.size(),
-                               reinterpret_cast<const unsigned char *>(data.data()),
-                               data.size());
+                               reinterpret_cast<const unsigned char *>(decodedSign),
+                               decodedLen,
+                               reinterpret_cast<const unsigned char *>(data),
+                               dataLen);
     EVP_MD_CTX_free(ctx);
+    delete[] decodedSign;
     isValid = (ret == 1);
     return ret == 1 ? OK : ERROR;
 }
 
-int RsaCrypto::toBase64(const char *str, int len, std::string &encoded)
+int RsaCrypto::toBase64(const char *str, int len, char** encoded)
 {
+    if (!str || len <= 0 || !encoded) {
+        return ERROR;
+    }
+
     BIO *mem = BIO_new(BIO_s_mem());
     BIO *b64 = BIO_new(BIO_f_base64());
     BIO_push(b64, mem);
 
-    if (BIO_write(b64, str, len) <= 0 || BIO_flush(b64) <= 0)
-    {
+    // 禁用 Base64 编码的换行符
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+    if (BIO_write(b64, str, len) <= 0 || BIO_flush(b64) <= 0) {
         BIO_free_all(b64);
         return ERROR;
     }
@@ -216,36 +265,49 @@ int RsaCrypto::toBase64(const char *str, int len, std::string &encoded)
     BUF_MEM *bufferPtr;
     BIO_get_mem_ptr(b64, &bufferPtr);
 
-    encoded.assign(bufferPtr->data, bufferPtr->length - 1); // 去掉换行符
+    *encoded = new char[bufferPtr->length + 1]; // +1 用于字符串结束符
+    memcpy(*encoded, bufferPtr->data, bufferPtr->length);
+    (*encoded)[bufferPtr->length] = '\0'; // 添加字符串结束符
     BIO_free_all(b64);
     return OK;
 }
 
-int RsaCrypto::fromBase64(const std::string &str, std::string &decoded)
+int RsaCrypto::fromBase64(const char* str, char** decoded, int& decodedLen)
 {
-    BIO *b64 = BIO_new(BIO_f_base64());
-    BIO *mem = BIO_new_mem_buf(str.data(), str.size());
-    BIO_push(b64, mem);
-
-    std::vector<char> buf(str.size());
-    int decodedLen = BIO_read(b64, buf.data(), buf.size());
-
-    if (decodedLen < 0)
-    {
-        BIO_free_all(b64);
+    if (!str || !decoded) {
         return ERROR;
     }
 
-    decoded.assign(buf.data(), decodedLen);
+    BIO *b64 = BIO_new(BIO_f_base64());
+    BIO *mem = BIO_new_mem_buf(str, -1);
+    BIO_push(b64, mem);
+
+    // 禁用 Base64 解码的换行符
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+    *decoded = new char[strlen(str)];
+    decodedLen = BIO_read(b64, *decoded, strlen(str));
+
+    if (decodedLen < 0) {
+        BIO_free_all(b64);
+        delete[] *decoded;
+        *decoded = nullptr;
+        return ERROR;
+    }
+
+    (*decoded)[decodedLen] = '\0'; // 添加字符串结束符
     BIO_free_all(b64);
     return OK;
 }
 
-int RsaCrypto::initPublicKey(const std::string &pubfile)
+int RsaCrypto::initPublicKey(const char* pubfile)
 {
-    FILE *file = fopen(pubfile.c_str(), "r");
-    if (!file)
-    {
+    if (!pubfile) {
+        return ERROR;
+    }
+
+    FILE *file = fopen(pubfile, "r");
+    if (!file) {
         return ERROR;
     }
 
@@ -254,11 +316,14 @@ int RsaCrypto::initPublicKey(const std::string &pubfile)
     return m_keyPair ? OK : ERROR;
 }
 
-int RsaCrypto::initPrivateKey(const std::string &prifile)
+int RsaCrypto::initPrivateKey(const char* prifile)
 {
-    FILE *file = fopen(prifile.c_str(), "r");
-    if (!file)
-    {
+    if (!prifile) {
+        return ERROR;
+    }
+
+    FILE *file = fopen(prifile, "r");
+    if (!file) {
         return ERROR;
     }
 
