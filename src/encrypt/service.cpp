@@ -79,15 +79,17 @@ bool service_c::clientRegisterPublicKey(acl::socket_stream *conn, long long body
     char signData[SIGN_DATA_SIZE];
     strcpy(signData, body + APPID_SIZE + USERID_SIZE + PUBLICKEY_SIZE + PUBLICKEY);
     //rsa类对象
-    RsaCrypto rsa(publicKey, false);
+    RsaCrypto rsa(publicKey, false, false);
     // 校验签名
     bool isValid = false;
-    rsa.rsaVerify(publicKey, signData, isValid, Level4);
-    if(!isValid)
+    rsa.rsaVerify(publicKey, strlen(publicKey), signData, isValid);
+    if (!isValid)
     {
         logger_error("rsaVerify is fail,userid:%s, publicKey:%s", userid, publicKey);
+        error(conn, SIGN_ERROR, "rsaVerify is fail,userid:%s, publicKey:%s", userid, publicKey);
         return false;
     }
+    logger("rsaVerify succeed!,userid:%s, publickey:%s", userid, publicKey);
     //  数据库对象
     db_c db;
     // 连接数据库
@@ -131,17 +133,18 @@ bool service_c::serverRegisterPublicKey(acl::socket_stream *conn, long long body
     strcpy(publicKey, body + APPID_SIZE + SERVERID_SIZE + PUBLICKEY_SIZE);
     char signData[SIGN_DATA_SIZE];
     strcpy(signData, body + APPID_SIZE + SERVERID_SIZE + PUBLICKEY_SIZE + PUBLICKEY);
-    // rsa类对象
-    RsaCrypto rsa(publicKey, false);
+    //rsa类对象
+    RsaCrypto rsa(publicKey, false, false);
     // 校验签名
     bool isValid = false;
-    rsa.rsaVerify(publicKey, signData, isValid, Level4);
-    if(!isValid)
+    rsa.rsaVerify(publicKey, strlen(publicKey), signData, isValid);
+    if (!isValid)
     {
         logger_error("rsaVerify is fail,serverid:%s, publicKey:%s", serverid, publicKey);
         error(conn, SIGN_ERROR, "rsaVerify is fail,serverid:%s, publicKey:%s", serverid, publicKey);
         return false;
     }
+    logger("rsaVerify succeed!,serverid:%s, publickey:%s", serverid, publicKey);
     // 数据库对象
     db_c db;
     // 连接数据库
@@ -159,10 +162,10 @@ bool service_c::serverRegisterPublicKey(acl::socket_stream *conn, long long body
 // 处理来自客户机的密钥协商请求
 bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
 {
-    // |包体长度|命令|状态|应用ID|用户ID|目标主机+serverid|
-    // |  8    |  1 | 1  |  16 | 256  |      6+128     |
+    // |包体长度|命令|状态|应用ID|用户ID|
+    // |  8    |  1 | 1  |  16 | 256  |
     //检查包体长度
-    long long expectedlen = APPID_SIZE + USERID_SIZE + TARGETHOST_SIZE + SERVERID_SIZE;
+    long long expectedlen = APPID_SIZE + USERID_SIZE;
     if(expectedlen != bodylen)
     {
         error(conn, -1, "invalid body length:%lld != %lld", bodylen, expectedlen);
@@ -180,10 +183,6 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
     strcpy(appid, body);
     char userid[USERID_SIZE];
     strcpy(userid, body + APPID_SIZE);
-    char targetHost[TARGETHOST_SIZE];
-    strcpy(targetHost, body + APPID_SIZE + USERID_SIZE);
-    char serverid[SERVERID_SIZE];
-    strcpy(serverid, body + APPID_SIZE + USERID_SIZE + TARGETHOST_SIZE);
     // 数据库对象
     db_c db;
     // 连接数据库
@@ -196,24 +195,27 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
         error(conn, -1, "read database fail, userid:%s", userid);
         return false;
     }
-    // 根据目标主机的serverid获取对应的公钥
-    // std::string serverKey;
-    // if (db.ServerPublicKey(serverid,serverKey) != OK)
-    // {
-    //     error(conn, -1, "read database fail, userid:%s", userid);
-    //     return false;
-    // }
-    //查找客户端对应的密钥
-
-    // 如果密钥不存在生成aes密钥
-    std::string CBCkey;
-    AesCrypto::generateKey(16, CBCkey);
-    //将密钥和userid进行绑定并存储
-    //rsa类对象
-    RsaCrypto rsa(clientKey.c_str(), false);
+    //查找客户端对应的密钥如果密钥不存在生成aes密钥
+    std::string key;
+    int keylen = 0;
+    if (db.ClientKey(userid, key) != OK)
+    {
+        char *tempkey = nullptr;
+        AesCrypto::generateKey(16, tempkey, keylen);
+        key = std::string(tempkey);
+        // 将密钥和userid进行绑定并存储
+        if(db.setClientKey(userid,key) != OK)
+        {
+            logger_error("clientKeyNego::write database fail,userid:%s", userid);
+            error(conn, -1, "write database fail, userid:%s", userid);
+            return false;
+        }
+    }
+    // rsa类对象
+    RsaCrypto rsa(clientKey.c_str(), false, false);
     // 使用客户端公钥加密aes密钥
-    std::string EnKey;
-    rsa.rsaPubKeyEncrypt(CBCkey, EnKey);
+    char* EnKey = nullptr;
+    rsa.rsaPubKeyEncrypt(key.c_str(), strlen(key.c_str()), &EnKey);
     // 构造响应
     //  |包体长度|命令|状态|密钥长度|密钥|
     //  |   8   | 1  | 1  |  8    | 16 |
@@ -223,23 +225,25 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
     llton(bodylen, respond);
     respond[BODYLEN_SIZE] = CMD_KEYNEGO_SERVEER_REPLY;
     respond[BODYLEN_SIZE + COMMAND_SIZE] = 0;
-    llton(CBCkey.length(), respond + HEADLEN);
-    strcpy(respond + HEADLEN + KEY_SIZE, EnKey.c_str());
+    llton(key.length(), respond + HEADLEN);
+    strcpy(respond + HEADLEN + KEY_SIZE, EnKey);
     // 将加密后的密钥给客户端
     if(conn->write(respond,respondlen) < 0)
     {
         logger_error("write fail: %s, respondlen:%lld, to:%s", acl::last_serror(), respondlen, conn->get_peer());
         return false;
     }
+    //释放加密后的密钥
+    delete[] EnKey;
     return true;
 }
 // 处理来自存储服务器的密钥协商请求
 bool service_c::serverKeyNego(acl::socket_stream *conn, long long bodylen) const
 {
-    // |包体长度|命令|状态|应用ID|serverID|目标主机+userid|
-    // |  8    |  1 | 1  |  16 | 128  |      6+256     |
+    // |包体长度|命令|状态|应用ID|serverID|userid|
+    // |  8    |  1 | 1  |  16 |   128  | 256  |
     //检查包体长度
-    long long expectedlen = APPID_SIZE + SERVERID_SIZE + TARGETHOST_SIZE + USERID_SIZE;
+    long long expectedlen = APPID_SIZE + SERVERID_SIZE + USERID_SIZE;
     if(expectedlen != bodylen)
     {
         error(conn, -1, "invalid body length:%lld != %lld", bodylen, expectedlen);
@@ -257,36 +261,33 @@ bool service_c::serverKeyNego(acl::socket_stream *conn, long long bodylen) const
     strcpy(appid, body);
     char serverid[SERVERID_SIZE];
     strcpy(serverid, body + APPID_SIZE);
-    char targetHost[TARGETHOST_SIZE];
-    strcpy(targetHost, body + APPID_SIZE + SERVERID_SIZE);
     char userid[USERID_SIZE];
-    strcpy(userid, body + APPID_SIZE + SERVERID_SIZE + TARGETHOST_SIZE);
+    strcpy(userid, body + APPID_SIZE + SERVERID_SIZE);
     // 数据库对象
     db_c db;
     // 连接数据库
     if(db.connect() != OK)
         return false;
-    // 根据用户ID获取对应的公钥
-    // std::string clientKey;
-    // if (db.ClientPublicKey(userid,clientKey) != OK)
-    // {
-    //     error(conn, -1, "read database fail, userid:%s", userid);
-    //     return false;
-    // }
-    // 根据serverid获取对应的公钥
+    // 根据serverID获取对应的公钥
     std::string serverKey;
-    if (db.ServerPublicKey(serverid,serverKey) != OK)
+    if (db.ClientPublicKey(userid,serverKey) != OK)
     {
-        error(conn, -1, "read database fail, userid:%s", userid);
+        error(conn, -1, "read database fail, userid:%s", serverid);
         return false;
     }
-    //根据userid查找对应的密钥
-    std::string CBCkey;
+    //查找客户端对应的密钥
+    std::string key;
+    if (db.ClientKey(userid, key) != OK)
+    {
+        logger_error("read database fail or clienntkey not exits, serverid:%s, userid:%s", serverid, userid);
+        error(conn, -1, "read database fail or clienntkey not exits, serverid:%s, userid:%s", serverid, userid);
+        return false;
+    }
+    // rsa类对象
+    RsaCrypto rsa(serverKey.c_str(), false, false);
     // 使用客户端公钥加密aes密钥
-    std::string EnKey;
-        //rsa类对象
-    RsaCrypto rsa(EnKey.c_str(), false);
-    rsa.rsaPubKeyEncrypt(CBCkey, EnKey);
+    char* EnKey = nullptr;
+    rsa.rsaPubKeyEncrypt(key.c_str(), strlen(key.c_str()), &EnKey);
     // 构造响应
     //  |包体长度|命令|状态|密钥长度|密钥|
     //  |   8   | 1  | 1  |  8    | 16 |
@@ -296,14 +297,16 @@ bool service_c::serverKeyNego(acl::socket_stream *conn, long long bodylen) const
     llton(bodylen, respond);
     respond[BODYLEN_SIZE] = CMD_KEYNEGO_SERVEER_REPLY;
     respond[BODYLEN_SIZE + COMMAND_SIZE] = 0;
-    llton(CBCkey.length(), respond + HEADLEN);
-    strcpy(respond + HEADLEN + KEY_SIZE, EnKey.c_str());
+    llton(key.length(), respond + HEADLEN);
+    strcpy(respond + HEADLEN + KEY_SIZE, EnKey);
     // 将加密后的密钥给存储服务器
     if(conn->write(respond,respondlen) < 0)
     {
         logger_error("write fail: %s, respondlen:%lld, to:%s", acl::last_serror(), respondlen, conn->get_peer());
         return false;
     }
+    //释放加密后的密钥
+    delete[] EnKey;
     return true;
 }
 // 应答成功
