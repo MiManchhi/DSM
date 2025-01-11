@@ -33,3 +33,11 @@ CREATE TABLE `sessionkeys` (
   CONSTRAINT `fk_clientID` FOREIGN KEY (`UserID`) REFERENCES `clientkeys` (`UserID`),
   CONSTRAINT `fk_serverID` FOREIGN KEY (`ServerID`) REFERENCES `serverkeys` (`ServerID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `clientprivatekeys` (
+  `PrivateKey` text NOT NULL,
+  `CreateTime` timestamp NULL DEFAULT NULL,
+  `UserID` varchar(128) NOT NULL,
+  `UpdateTime` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`UserID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

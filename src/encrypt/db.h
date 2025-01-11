@@ -27,7 +27,7 @@ public:
      * @param publicKey - 客户端公钥
      * @return OK 设置成功 ERROR 设置失败
     */
-    int setClientPublicKey(const char *userid, const std::string publicKey, const long long keylen) const;
+    int setClientPublicKey(const char *userid, const std::string &publicKey, const long long &keylen) const;
     /*
      * @brief 查询存储服务器公钥
      * @param serverid - 存储服务器ID（主机名）
@@ -41,15 +41,29 @@ public:
      * @param publicKey - 客户端公钥
      * @return OK 设置成功 ERROR 设置失败
     */
-    int setServerPublicKey(const char *serverid, const std::string publicKey, const long long keylen) const;
+    int setServerPublicKey(const char *serverid, const std::string &publicKey, const long long &keylen) const;
+    /*
+     * @brief 设置客户端密钥
+     * @param userid - 用户ID
+     * @param Key - 客户端密钥
+     * @return OK 设置成功 ERROR 设置失败
+    */
+    int setClientKey(const char *userid, const std::string &Key) const;
+    /*
+     * @brief 查找客户端密钥
+     * @param userid - 用户ID
+     * @param Key - 输出参数客户端密钥
+     * @return OK 查找成功 ERROR 查找失败
+     */
+    int ClientKey(const char *userid, std::string &Key) const;
     /*
      * @brief 记录会话历史
      * @param userid - 客户端id
      * @param serverid - 存储服务器id
      * @param ukey - 客户端公钥
      * @param skey - 服务器公钥
-    */
-    int Addsession(const char *userid, const char *serverid, const std::string ukey, const std::string skey) const;
+     */
+    int Addsession(const char *userid, const char *serverid, const std::string &ukey, const std::string &skey) const;
 
 private:
     MYSQL *m_mysql;
