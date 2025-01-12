@@ -17,6 +17,7 @@ extern char* cfg_raddrs;                  //Redis地址表
 extern acl::master_str_tbl cfg_str[];     //字符串配置表
 
 extern int cfg_interval;                  //存储服务器状态检查间隔秒数
+extern int cfg_encrypt_interval;          //密钥协商服务器状态检查间隔秒数
 extern int cfg_mtimeout;                  //MySQl读写超时
 extern int cfg_maxconns;                  //Redis连接池最大连接数
 extern int cfg_ctimeout;                  //Redis连接超时
@@ -31,3 +32,5 @@ extern acl::redis_client_pool* g_rconns;  //Redis连接池
 extern std::string g_hostname;            //主机名
 extern std::map<std::string,std::list<storage_info_t>> g_groups;  //组表
 extern pthread_mutex_t g_mutex;           //互斥锁，保护组表并发读写
+extern std::map<std::string,std::list<encrypt_info_t>> g_encrypt_groups;  //组表
+extern pthread_mutex_t g_encrypt_mutex;           //互斥锁，保护组表并发读写

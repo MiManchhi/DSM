@@ -22,6 +22,12 @@ private:
     bool beat(acl::socket_stream* conn,long long bodylen) const;         //
     //处理来自客户机的获取存储服务器地址列表请求       包体长度              //
     bool saddrs(acl::socket_stream* conn,long long bodylen) const;       //
+    //处理来自密钥协商服务器的加入包                    包体长度             //
+    bool join_encrypt(acl::socket_stream* conn,long long bodylen) const;  //
+    //处理来自密钥协商服务器的心跳包                    包体长度             //
+    bool beat_encrypt(acl::socket_stream* conn,long long bodylen) const;  //
+    //处理来自客户机的获取密钥协商服务器地址列表请求       包体长度           //
+    bool eaddrs(acl::socket_stream* conn,long long bodylen) const;       //
     //处理来自客户机的获取组列表请求                                       //
     bool groups(acl::socket_stream* conn) const;                        //
                                                                         //
@@ -33,10 +39,18 @@ private:
     int beat(char const* groupname,char const* hostname,char const* saddr) const;
     //响应客户机存储服务器地址列表
     int saddrs(acl::socket_stream* conn,char const* appid,char const* userid) const;
+    //将密钥协商服务器加入组表  密钥协商服务器加入信息结构体   ip地址
+    int join_encrypt(encrypt_join_t const* ej,char const* eaddr) const;
+    //将密钥协商服务器标记为活动  组名                 主机名               ip
+    int beat_encrypt(char const* groupname,char const* hostname,char const* eaddr) const;
+    //响应客户机密钥协商服务器地址列表
+    int eaddrs(acl::socket_stream* conn,char const* appid,char const* userid) const;
     //根据用户ID获取其对应的组名                                          返回参数
     int group_of_user(char const* appid,char const* userid,std::string& groupname) const;
     //根据组名获取存储服务器地址列表
     int saddrs_of_group(char const* groupname,std::string& saddrs) const;
+    //根据组名获取密钥协商服务器地址列表
+    int eaddrs_of_group(char const* groupname,std::string& eaddrs) const;
     //应答成功
     bool ok(acl::socket_stream* conn) const;
     //应答错误                                 错误号              错误信息

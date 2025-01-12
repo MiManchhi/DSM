@@ -37,3 +37,5 @@ acl::redis_client_pool* g_rconns;  //Redis连接池
 std::string g_hostname;            //主机名
 std::map<std::string,std::list<storage_info_t>> g_groups;  //组表
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;           //互斥锁，保护组表并发读写
+std::map<std::string,std::list<encrypt_info_t>> g_encrypt_groups;  //组表
+pthread_mutex_t g_encrypt_mutex = PTHREAD_MUTEX_INITIALIZER;           //互斥锁，保护组表并发读写

@@ -45,6 +45,15 @@ bool service_c::business(acl::socket_stream *conn, char const *head) const
     case CMD_TRACKER_SADDRS:
         result = saddrs(conn,bodylen);
         break;
+    case CMD_ENCRYPT_JOIN:
+        result = join_encrypt(conn, bodylen);
+        break;
+    case CMD_ENCRYPT_BEAT:
+        result = beat_encrypt(conn, bodylen);
+        break;
+    case CMD_TRACKER_EADDRS:
+        result = eaddrs(conn, bodylen);
+        break;
     case CMD_TRACKER_GROUPS:
         result = groups(conn);
         break;
@@ -178,6 +187,130 @@ bool service_c::saddrs(acl::socket_stream *conn, long long bodylen) const
         return false;
     return true;
 }
+
+//处理来自密钥协商服务器的加入包                    包体长度             
+bool service_c::join_encrypt(acl::socket_stream* conn,long long bodylen) const
+{
+    //   |包体长度|命令|状态|encrypt_join_body_t|
+    //   |   8   | 1  | 1  |                   |
+    //检查包体长度
+    long long expectedLength = sizeof(encrypt_join_body_t);
+    if(bodylen != expectedLength)
+    {
+        error(conn,-1,"invalid body length:%lld != %lld",bodylen,expectedLength);
+        return false;
+    }
+    //接收包体
+    char body[bodylen];
+    if(conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail:%s, bodylen:%lld, from:%s",acl::last_serror(),bodylen,conn->get_peer());
+        return false;
+    }
+    //解析包体
+    encrypt_join_t ej;
+    encrypt_join_body_t* ejb = (encrypt_join_body_t*)body;
+    //版本
+    strcpy(ej.ej_version,ejb->ejb_version);
+    //组名
+    strcpy(ej.ej_groupname,ejb->ejb_groupname);
+    if(valid(ej.ej_groupname) != OK)
+    {
+        error(conn,-1,"valid groupname:%s",ej.ej_groupname);
+        return false;
+    }
+    //主机名
+    strcpy(ej.ej_hostname,ejb->ejb_hostname);
+    //端口号
+    ej.ej_port = ntos(ejb->ejb_port);
+    if(!ej.ej_port)
+    {
+        error(conn,-1,"invalid port:%u",ej.ej_port);
+        return false;
+    }
+    //启动时间
+    ej.ej_stime = ntol(ejb->ejb_stime);
+    //加入时间
+    ej.ej_jtime = ntol(ejb->ejb_jtime);
+    logger("encrypt join,version:%s, groupname:%s, hostname:%s, port:%u, stime:%s, jtime:%s",
+    ej.ej_version,ej.ej_groupname,ej.ej_hostname,ej.ej_port,std::string(ctime(&ej.ej_stime)).c_str(),std::string(ctime(&ej.ej_jtime)).c_str());
+    //将存储服务器加入组表
+    if(join_encrypt(&ej,conn->get_peer()) != OK)
+    {
+        error(conn,-1,"join into groups fail");
+        return false;
+    }
+    return ok(conn);
+}
+
+//处理来自密钥协商服务器的心跳包                    包体长度            
+bool service_c::beat_encrypt(acl::socket_stream* conn,long long bodylen) const
+{
+    //   |包体长度|命令|状态|encrypt_beat_body_t|
+    //   |   8   | 1  | 1  |                   |
+    //检查包体长度
+    long long expectedLength = sizeof(encrypt_beat_body_t);
+    if(bodylen != expectedLength)
+    {
+        error(conn,-1,"invalid body length:%lld != %lld",bodylen,expectedLength);
+        return false;
+    }
+    //接收包体
+    char body[bodylen];
+    if(conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail:%s, bodylen:%lld, from:%s",acl::last_serror(),bodylen,conn->get_peer());
+        return false;
+    }
+    //解析包体
+    encrypt_beat_body_t* ebb = (encrypt_beat_body_t*)body;
+    //组名
+    char groupname[ENCRYPT_GROUPNAME_MAX+1];
+    strcpy(groupname,ebb->ebb_groupname);
+    //主机名
+    char hostname[ENCRYPT_HOSTNAME_MAX+1];
+    strcpy(hostname,ebb->ebb_hostname);
+    logger("encrypt beat,groupname:%s, hostname:%s",groupname,hostname);
+    //将存储服务器标记为活动
+    if(beat_encrypt(groupname,hostname,conn->get_peer()) != OK)
+    {
+        error(conn,-1,"mark encrypt as active fail");
+        return false;
+    }
+    return ok(conn);
+}
+
+//处理来自客户机的获取密钥协商服务器地址列表请求       包体长度           
+bool service_c::eaddrs(acl::socket_stream* conn,long long bodylen) const
+{
+    //  |包体长度|命令|状态|应用ID|用户ID|文件ID|
+    //  |  8    | 1  | 1  | 16  |  256 | 128 |
+    //检查包体长度
+    long long expectLength = APPID_SIZE + USERID_SIZE + FILEID_SIZE;
+    if(bodylen != expectLength)
+    {
+        error(conn,-1,"invalid body length:%lld != %lld",bodylen,expectLength);
+        return false;
+    }
+    //接收包体
+    char body[bodylen];
+    if(conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail:%s,bodylen:%lld, from:%s",acl::last_serror(),bodylen,conn->get_peer());
+        return false;
+    }
+    //解析包体
+    char appid[APPID_SIZE];
+    strcpy(appid,body);
+    char userid[USERID_SIZE];
+    strcpy(userid,body + APPID_SIZE);
+    char fileid[FILEID_SIZE];
+    strcpy(fileid,body + APPID_SIZE + USERID_SIZE);
+    //响应客户机存储服务器地址列表
+    if(eaddrs(conn,appid,userid) != OK)
+        return false;
+    return true;
+}      
 
 //处理来自客户机的获取组列表请求
 bool service_c::groups(acl::socket_stream *conn) const
@@ -424,6 +557,177 @@ int service_c::saddrs(acl::socket_stream *conn, char const *appid, char const *u
     return OK;
 }
 
+//将密钥协商服务器加入组表  密钥协商服务器加入信息结构体   ip地址
+int service_c::join_encrypt(encrypt_join_t const* ej,char const* eaddr) const
+{
+    //互斥锁加锁
+    if((errno = pthread_mutex_lock(&g_encrypt_mutex)))
+    {
+        logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    //在组表中查找待加入密钥协商服务器所隶属的组
+    auto group = g_encrypt_groups.find(ej->ej_groupname);
+    if(group != g_encrypt_groups.end())  //若找到该组
+    {
+        //遍历该组的密钥协商服务器列表
+        bool Isfind = false;
+        for(auto& value:group->second)
+        {
+            //若待加入密钥协商服务器在列表中
+            if(!strcmp(value.ei_hostname,ej->ej_hostname) && !strcmp(value.ei_addr,eaddr))
+            {
+                //更新记录
+                strcpy(value.ei_version,ej->ej_version); //版本号
+                value.ei_port = ej->ej_port;             //端口号
+                value.ei_stime = ej->ej_stime;           //启动时间
+                value.ei_jtime = ej->ej_jtime;           //加入时间
+                value.ei_btime = ej->ej_jtime;           //心跳时间
+                value.ei_status = ENCRYPT_STATUS_ONLINE; //状态
+                Isfind = true;
+                break;
+            }
+        }
+        //若不在密钥协商服务器列表中
+        if(!Isfind)
+        {
+            //将待加入密钥协商服务器加入该列表
+            encrypt_info_t ei;
+			strcpy(ei.ei_version,  ej->ej_version);  // 版本
+			strcpy(ei.ei_hostname, ej->ej_hostname); // 主机名
+			strcpy(ei.ei_addr,     eaddr);           // IP地址
+			ei.ei_port   = ej->ej_port;              // 端口号
+			ei.ei_stime  = ej->ej_stime;             // 启动时间
+			ei.ei_jtime  = ej->ej_jtime;             // 加入时间
+			ei.ei_btime  = ej->ej_jtime;             // 心跳时间
+			ei.ei_status = ENCRYPT_STATUS_ONLINE;    // 状态
+			group->second.push_back(ei);
+        }
+    }
+    else  //若没有找到该组
+    {
+        //将待加入密钥协商服务器所隶属的组加入组表
+        g_encrypt_groups[ej->ej_groupname] = std::list<encrypt_info_t>();
+        //将待加入密钥协商服务器加入该组的密钥协商服务器列表
+        encrypt_info_t ei;
+			strcpy(ei.ei_version,  ej->ej_version);  // 版本
+			strcpy(ei.ei_hostname, ej->ej_hostname); // 主机名
+			strcpy(ei.ei_addr,     eaddr);           // IP地址
+			ei.ei_port   = ej->ej_port;              // 端口号
+			ei.ei_stime  = ej->ej_stime;             // 启动时间
+			ei.ei_jtime  = ej->ej_jtime;             // 加入时间
+			ei.ei_btime  = ej->ej_jtime;             // 心跳时间
+			ei.ei_status = ENCRYPT_STATUS_ONLINE;    // 状态
+			g_encrypt_groups[ej->ej_groupname].push_back(ei);
+    }
+    //互斥锁解锁
+    if((errno = pthread_mutex_unlock(&g_encrypt_mutex)))
+    {
+        logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    return OK;
+}
+
+//将密钥协商服务器标记为活动  组名                 主机名               ip
+int service_c::beat_encrypt(char const* groupname,char const* hostname,char const* eaddr) const
+{
+    //互斥锁加锁
+    if((errno = pthread_mutex_lock(&g_encrypt_mutex)))
+    {
+        logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    int result = OK;
+    //在组表中查找待加入密钥协商服务器所隶属的组
+    auto group = g_encrypt_groups.find(groupname);
+    if(group != g_encrypt_groups.end())  //若找到该组
+    {
+        //遍历该组的密钥协商服务器列表
+        bool Isfind = false;
+        for(auto& value:group->second)
+        {
+            //若待加入密钥协商服务器在列表中
+            if(!strcmp(value.ei_hostname,hostname) && !strcmp(value.ei_addr,eaddr))
+            {
+                //更新记录
+                value.ei_btime = time(NULL);             //心跳时间
+                value.ei_status = ENCRYPT_STATUS_ACTIVE; //状态
+                Isfind = true;
+                break;
+            }
+        }
+        //若不在密钥协商服务器列表中
+        if(!Isfind)
+        {
+            logger_error("encrypt not found,groupname:%s, hostname:%s, eaddr:%s",groupname,hostname,eaddr);
+            result = ERROR;
+        }
+    }
+    else  //若没有找到该组
+    {
+        logger_error("group ont found,groupname:%s",groupname);
+        result = ERROR;
+    }
+    //互斥锁解锁
+    if((errno = pthread_mutex_unlock(&g_encrypt_mutex)))
+    {
+        logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    return result;
+}
+
+//响应客户机密钥协商服务器地址列表
+int service_c::eaddrs(acl::socket_stream* conn,char const* appid,char const* userid) const
+{
+    //应用ID是否合法
+    if(valid(appid) != OK)
+    {
+        error(conn,-1,"invalid appid:%s",appid);
+        return ERROR;
+    }
+    //应用ID是否存在
+    if(std::find(g_appids.begin(),g_appids.end(),appid) == g_appids.end())
+    {
+        error(conn,-1,"unknown appid:%s",appid);
+        return ERROR;
+    }
+    //根据用户ID获取对应组名
+    std::string groupname;
+    if(group_of_user(appid,userid,groupname) != OK)
+    {
+        error(conn,-1,"get groupname fail");
+        return ERROR;
+    }
+    //根据组名获取密钥协商服务器地址列表
+    std::string eaddrs;
+    if(eaddrs_of_group(groupname.c_str(),eaddrs) != OK)
+    {
+        error(conn,-1,"get encrypt address fail");
+        return ERROR;
+    }
+    logger("appid:%s, userid:%s, groupname:%s, eaddrs:%s",appid,userid,groupname.c_str(),eaddrs.c_str());
+    //构造响应
+    //|包体长度|命令|状态|组名+密钥协商服务器地址列表|
+    //|   8   | 1  | 1  |       包体长度          |
+    long long bodylen = ENCRYPT_GROUPNAME_MAX + 1 + eaddrs.size() + 1;
+    long long respondlen = HEADLEN + bodylen;
+    char respond[respondlen] = {};
+    llton(bodylen,respond);
+    respond[BODYLEN_SIZE] = CMD_TRACKER_REPLY;
+    respond[BODYLEN_SIZE+COMMAND_SIZE] = 0;
+    strncpy(respond+HEADLEN,groupname.c_str(),ENCRYPT_GROUPNAME_MAX);
+    strcpy(respond+HEADLEN+ENCRYPT_GROUPNAME_MAX+1,eaddrs.c_str());
+    //发送响应
+    if(conn->write(respond,respondlen) < 0)
+    {
+        logger_error("write fail:%s, respondlen:%lld, to:%s",acl::last_serror(),respondlen,conn->get_peer());
+        return ERROR;
+    }
+    return OK;
+}
+
 //根据用户ID获取其对应的组名
 int service_c::group_of_user(char const *appid, char const *userid, std::string &groupname) const
 {
@@ -527,6 +831,74 @@ int service_c::saddrs_of_group(char const *groupname, std::string &saddrs) const
     }
     //互斥锁解锁
     if((errno = pthread_mutex_unlock(&g_mutex)))
+    {
+        logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    return result;
+}
+
+//根据组名获取密钥协商服务器地址列表
+int service_c::eaddrs_of_group(char const* groupname,std::string& eaddrs) const
+{
+    //互斥锁加锁
+    if((errno = pthread_mutex_lock(&g_encrypt_mutex)))
+    {
+        logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
+        return ERROR;
+    }
+    //根据组名查找组
+    int result = OK;
+    const auto group = g_encrypt_groups.find(groupname);
+    //若找到该组
+    if(group != g_encrypt_groups.end())
+    {
+        //若该组密钥协商服务器列表非空
+        if(!group->second.empty())
+        {
+            //在该组的密钥协商服务器列表中，从随机位置开始最多抽取三台处于活动状态的密钥协商服务器
+            srand(time(NULL));
+            int nsis = group->second.size();
+            int nrand = rand() % nsis;
+            auto iter = group->second.begin();
+            int nacts = 0;
+            for (int i = 0; i < nsis+nrand; ++i,++iter)
+            {
+                if(iter == group->second.end())
+                    iter = group->second.begin();
+                logger("i:%d, nrand:%d, addr:%s, port:%u, status:%d",i,nrand,iter->ei_addr,iter->ei_port,iter->ei_status);
+                if(i >= nrand && iter->ei_status == ENCRYPT_STATUS_ACTIVE)
+                {
+                    char eaddr[256];
+                    sprintf(eaddr,"%s:%d",iter->ei_addr,iter->ei_port);
+                    eaddrs += eaddr;
+                    eaddrs += ";";
+                    if(++nacts >= 3)
+                        break;
+                }
+            }
+            //若没有处于活动状态的密钥协商服务器
+            if(!nacts)
+            {
+                logger_error("no active encrypt in group %s",groupname);
+                result = ERROR;
+            }
+        }
+        //若密钥协商服务器列表为空
+        else
+        {
+            logger_error("no encrypt in group %s",groupname);
+            result = ERROR;
+        }
+    }
+    //若没有该组
+    else
+    {
+        logger_error("not found group %s",groupname);
+        result = ERROR;
+    }
+    //互斥锁解锁
+    if((errno = pthread_mutex_unlock(&g_encrypt_mutex)))
     {
         logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
         return ERROR;
