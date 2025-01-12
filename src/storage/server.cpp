@@ -40,6 +40,12 @@ void server_c::proc_on_init(void)
     splitstring(cfg_iaddrs, g_iaddrs);
     if(g_iaddrs.empty())
         logger_fatal("id addresses is empty");
+        // encrypt服务器地址表
+    if(!cfg_eaddrs || !strlen(cfg_eaddrs))
+        logger_fatal("encrypt addresses is null");
+    splitstring(cfg_eaddrs, g_eaddrs);
+    if(g_eaddrs.empty())
+        logger_fatal("encrypt addresses is empty");
     //  MySQL地址表
     if(!cfg_maddrs || !strlen(cfg_maddrs))
         logger_fatal("mysql addresses is null");
@@ -88,12 +94,12 @@ void server_c::proc_on_init(void)
     }
     // 打印配置信息
 	logger("cfg_gpname: %s, cfg_spaths: %s, cfg_taddrs: %s, "
-		"cfg_iaddrs: %s, cfg_maddrs: %s, cfg_raddrs: %s, "
+		"cfg_iaddrs: %s, cfg_eaddrs: %s, cfg_maddrs: %s, cfg_raddrs: %s, "
 		"cfg_bindport: %d, cfg_interval: %d, cfg_mtimeout: %d, "
 		"cfg_maxconns: %d, cfg_ctimeout: %d, cfg_rtimeout: %d, "
 		"cfg_ktimeout: %d",
 		cfg_gpname, cfg_spaths, cfg_taddrs,
-		cfg_iaddrs, cfg_maddrs, cfg_raddrs,
+		cfg_iaddrs, cfg_eaddrs, cfg_maddrs, cfg_raddrs,
 		cfg_bindport, cfg_interval, cfg_mtimeout,
 		cfg_maxconns, cfg_ctimeout, cfg_rtimeout,
 		cfg_ktimeout);

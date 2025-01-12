@@ -12,6 +12,7 @@ extern char *cfg_gpname;                  //隶属组名
 extern char *cfg_spaths;                  //存储路径表
 extern char *cfg_taddrs;                  //跟踪服务器地址表
 extern char *cfg_iaddrs;                  //id服务器地址表
+extern char *cfg_eaddrs;                  //encrypt服务器地址表
 extern char *cfg_maddrs;                  // MySQL地址表
 extern char* cfg_raddrs;                  //Redis地址表
 extern acl::master_str_tbl cfg_str[];     //字符串配置表
@@ -28,6 +29,7 @@ extern acl::master_int_tbl cfg_int[];     //整形配置表
 extern std::vector<std::string> g_spaths; //存储地址表
 extern std::vector<std::string> g_taddrs; //跟踪服务器地址表
 extern std::vector<std::string> g_iaddrs; //id服务器地址表
+extern std::vector<std::string> g_eaddrs; //encrypt服务器地址表
 extern std::vector<std::string> g_maddrs; // MySQL地址表
 extern std::vector<std::string> g_raddrs; //Redis地址表
 extern acl::redis_client_pool* g_rconns;  //Redis连接池
