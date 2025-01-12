@@ -54,6 +54,42 @@ typedef struct storage_info
     storage_status_t si_status;                      //存储服务器状态
 }storage_info_t;
 
+//密钥协商服务器状态
+typedef enum encrypt_status
+{
+    ENCRYPT_STATUS_OFFLINE,   //离线
+    ENCRYPT_STATUS_ONLINE,    //在线
+    ENCRYPT_STATUS_ACTIVE     //活动
+}encrypt_status_t;
+
+//密钥协商服务器加入和信息
+constexpr int ENCRYPT_VERSION_MAX = 6;       //版本信息最大字符数
+constexpr int ENCRYPT_GROUPNAME_MAX = 16;    //组名最大字符数
+constexpr int ENCRYPT_HOSTNAME_MAX = 128;    //主机名最大字符数
+constexpr int ENCRYPT_ADDR_MAX = 16;         //Ip地址最大字符数
+//加入信息
+typedef struct encrypt_join
+{
+    char ej_version[ENCRYPT_VERSION_MAX+1];          //版本
+    char ej_groupname[ENCRYPT_GROUPNAME_MAX+1];      //组名
+    char ej_hostname[ENCRYPT_HOSTNAME_MAX+1];        //主机名
+    in_port_t ej_port;                               //端口号
+    time_t ej_stime;                                 //启动时间
+    time_t ej_jtime;                                 //加入时间
+}encrypt_join_t;
+//描述信息
+typedef struct encrypt_info
+{
+    char ei_version[ENCRYPT_VERSION_MAX+1];          //版本
+    char ei_hostname[ENCRYPT_HOSTNAME_MAX+1];        //主机名
+    char ei_addr[ENCRYPT_ADDR_MAX+1];                //ip地址
+    in_port_t ei_port;                               //端口号
+    time_t ei_stime;                                 //启动时间
+    time_t ei_jtime;                                 //加入时间
+    time_t ei_btime;                                 //心跳时间
+    encrypt_status_t ei_status;                      //密钥协商服务器状态
+}encrypt_info_t;
+
 //键值对
 constexpr int ID_KEY_MAX = 64;
 typedef struct id_pair
