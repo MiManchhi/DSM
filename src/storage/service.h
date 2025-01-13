@@ -20,6 +20,10 @@ private:
     bool download(acl::socket_stream *conn, long long bodylen) const;
     // 处理来自客户机的删除文件请求
     bool delfile(acl::socket_stream *conn, long long bodylen) const;
+    //处理来自客户机的加密上传文件请求
+    bool enupload(acl::socket_stream *conn, long long bodylen) const;
+    // 处理来自客户机的加密下载文件请求
+    bool endownload(acl::socket_stream *conn, long long bodylen) const;
     //生成文件路径
     bool genpath(char *filepath) const;
     // 将ID转换为512进制
@@ -28,8 +32,12 @@ private:
     int idGenpath(char const *spath, long fileid, char *filepath) const;
     // 接收并保存文件
     int save(acl::socket_stream *conn, char const *appid, char const *userid, char const *fileid, long long filesize, char const *filepath) const;
+    // 接收并保存加密文件
+    int ensave(acl::socket_stream *conn, char const *appid, char const *userid, char const *fileid, long long filesize, char const *filepath) const;
     //读取并发送文件
     int send(acl::socket_stream *conn, char const *filepath, long long offset, long long size) const;
+    //读取并发送加密文件
+    int ensend(acl::socket_stream *conn, char const *appid, char const *userid, char const *filepath, long long offset, long long size) const;
     // 应答成功
     bool ok(acl::socket_stream *conn) const;
     // 应答错误

@@ -23,7 +23,7 @@ CFLAGS     = -c -Wall -Wextra -I../common
 DEBUG_FLAGS     = -g -O0
 RELEASE_FLAGS   = -O2
 # 库依赖项
-LIBS       = -pthread -lacl_all `mysql_config --libs`
+LIBS       = -pthread -lacl_all `mysql_config --libs` -lssl -lcrypto
 
 RM         = rm -rf
 

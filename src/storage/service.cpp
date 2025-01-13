@@ -2,6 +2,8 @@
 //实现业务服务类
 #include <linux/limits.h>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include "proto.h"
 #include "util.h"
 #include "globals.h"
@@ -9,6 +11,9 @@
 #include "file.h"
 #include "id.h"
 #include "service.h"
+#include "encrypt.h"
+#include "rsacrypto.h"
+#include "aescrypto.h"
 
 service_c::service_c()
 {
@@ -49,6 +54,12 @@ bool service_c::business(acl::socket_stream *conn, char const *head) const
         break;
     case CMD_STORAGE_DELETE:
         result = delfile(conn, bodylen);
+        break;
+    case CMD_STORAGE_ENDOWNLOAD:
+        result = endownload(conn, bodylen);
+        break;
+    case CMD_STORAGE_ENUPLOAD:
+        result = enupload(conn, bodylen);
         break;
     default:
         error(conn, -1, "unknown command:%d", command);
@@ -303,6 +314,136 @@ bool service_c::delfile(acl::socket_stream *conn, long long bodylen) const
 	return ok(conn);
 }
 
+//处理来自客户机的加密上传文件请求
+bool service_c::enupload(acl::socket_stream *conn, long long bodylen) const
+{
+    // |包体长度|命令|状态|应用ID|用户ID|文件ID|文件大小|文件内容|
+    // |  8    | 1  | 1 |  16  | 256  | 128  |  8    |文件大小|
+    //检查包体长度
+    long long expectedlen = APPID_SIZE + USERID_SIZE + FILEID_SIZE + BODYLEN_SIZE;
+    if(bodylen < expectedlen)
+    {
+        error(conn, -1, "invalid body length:%lld < %lld", bodylen, expectedlen);
+        return false;
+    }
+    // 接收包体
+    char body[expectedlen]; //接收文件内容
+    if(conn->read(body,expectedlen) < 0)
+    {
+        logger_error("read fail:%s,expectedlen:%lld, from:%s", acl::last_serror(), expectedlen, conn->get_peer());
+        return false;
+    }
+    // 解析包体
+    char appid[APPID_SIZE];
+    strcpy(appid, body);
+    char userid[USERID_SIZE];
+    strcpy(userid, body + APPID_SIZE);
+    char fileid[FILEID_SIZE];
+    strcpy(fileid, body + APPID_SIZE + USERID_SIZE);
+    long long filesize = ntoll(body + APPID_SIZE + USERID_SIZE + FILEID_SIZE);
+    // 检查文件大小
+    if(filesize != bodylen - expectedlen)
+    {
+        logger_error("inavlid file size:%lld != %lld", filesize, bodylen - expectedlen);
+        error(conn, -1, "inavlid file size:%lld != %lld", filesize, bodylen - expectedlen);
+        return false;
+    }
+    // 生成文件路径
+    char filepath[PATH_MAX + 1];
+    if(genpath(filepath) != OK)
+    {
+        error(conn, -1, "get filepath fail");
+        return false;
+    }
+    logger("upload file, appid: %s, userid: %s, "
+		"fileid: %s, filesize: %lld, filepath: %s",
+		appid, userid, fileid, filesize, filepath);
+    
+    //  接收并保存文件
+    int result = ensave(conn, appid, userid, fileid, filesize, filepath);
+    if(result == SOCKET_ERROR)
+        return false;
+    else if(result == ERROR)
+    {
+        error(conn, -1, "receive and save file fail,fileid:%s", fileid);
+        return false;
+    }
+    return ok(conn);
+}
+
+// 处理来自客户机的加密下载文件请求
+bool service_c::endownload(acl::socket_stream *conn, long long bodylen) const
+{
+    // |包体长度|状态|命令|应用ID|用户ID|文件ID|偏移|大小|
+    // |  8    | 1  | 1  |  16 | 256  | 128 | 8  | 8  |
+    //检查包体长度
+    long long expectedlen = APPID_SIZE + USERID_SIZE + FILEID_SIZE + BODYLEN_SIZE + BODYLEN_SIZE;
+    if(bodylen != expectedlen)
+    {
+        error(conn, -1, "invalid body length:%lld != %lld", bodylen, expectedlen);
+        return false;
+    }
+    // 接收包体
+    char body[bodylen];
+    if (conn->read(body,bodylen) < 0)
+    {
+        logger_error("read fail:%s, bodylen :%lld, from:%s", acl::last_serror(), bodylen, conn->get_peer());
+        return false;
+    }
+    // 解析包体
+    char appid[APPID_SIZE];
+    strcpy(appid, body);
+    char userid[USERID_SIZE];
+    strcpy(userid, body + APPID_SIZE);
+    char fileid[FILEID_SIZE];
+    strcpy(fileid, body + APPID_SIZE + USERID_SIZE);
+    long long offset = ntoll(body + APPID_SIZE + USERID_SIZE + FILEID_SIZE);
+    long long size = ntoll(body + APPID_SIZE + USERID_SIZE + FILEID_SIZE + BODYLEN_SIZE);
+    // 数据库访问对象
+    db_c db;
+    // 连接数据库
+    if(db.connect() != OK)
+        return false;
+    // 根据文件ID获取其对应的路径及大小
+    std::string filepath;
+    long long filesize;
+    if(db.get(appid,userid,fileid,filepath,filesize) != OK)
+    {
+        error(conn, -1, "read database fail,fileid:%s", fileid);
+        return false;
+    }
+    // 检查位置
+    if(offset < 0 || filesize < offset)
+    {
+        logger_error("invalid offset,%lld is not between 0 and %lld", offset, filesize);
+        error(conn, -1, "invalid offset,%lld is not between 0 and %lld", offset, filesize);
+        return false;
+    }
+    // 大小为零表示下载到文件尾
+    if(!size)
+        size = filesize - offset;
+    // 检查大小
+    if(size < 0 || filesize - offset < size)
+    {
+        logger_error("invalid size,%lld is not between 0 and %lld", size, filesize - offset);
+        error(conn, -1, "invalid size,%lld is not between 0 and %lld", size, filesize - offset);
+        return false;
+    }
+    logger("download file, appid: %s, userid: %s, fileid: %s, "
+		"offset: %lld, size: %lld, filepath: %s, filesize: %lld",
+		appid, userid, fileid, offset, size, filepath.c_str(), filesize);
+    // 读取并发送文件
+    int result = ensend(conn, appid, userid, filepath.c_str(), offset, size);
+    if(result == SOCKET_ERROR)
+        return false;
+    else if(result == ERROR)    
+    {
+        error(conn, -1, "read and send file fail,fileid:%s", fileid);
+        return false;
+    }
+    return true;
+}
+
 //生成文件路径
 bool service_c::genpath(char *filepath) const
 {
@@ -413,6 +554,137 @@ int service_c::save(acl::socket_stream *conn, char const *appid, char const *use
     return OK;
 }
 
+int service_c::ensave(acl::socket_stream *conn, char const *appid, char const *userid, char const *fileid, long long filesize, char const *filepath) const
+{
+    // 检查是否存在密钥对，如果不存在则生成
+    std::ifstream pubfile("./public.pem");
+    std::ifstream prifile("./private.pem");
+    if (!pubfile.good() || !prifile.good()) {
+        int ret = RsaCrypto::generateRsakey(2048);
+        if (ret != OK) {
+            logger_error("generateRsakey fail");
+            error(conn, -1, "generateRsakey fail");
+            return false;
+        }
+    }
+
+    // 读取公钥文件
+    std::ifstream file("./public.pem");
+    if (!file) {
+        logger_error("open file fail: ./public.pem");
+        error(conn, -1, "open file fail: ./public.pem");
+        return false;
+    }
+
+    // 使用 std::ostringstream 读取文件内容
+    std::ostringstream oss;
+    oss << file.rdbuf(); // 将文件内容读取到 oss 中
+    std::string pubKey = oss.str(); // 转换为 std::string
+
+    // 对公钥进行签名
+    char* signdata = nullptr;
+    RsaCrypto rsa("private.pem", true, true);
+    rsa.rsaSign(pubKey.c_str(), pubKey.length(), &signdata);
+
+    // 向密钥协商服务器发送公钥注册请求
+    encrypto_c crypt;
+    if (crypt.registerPublicKey(appid, g_hostname.c_str(), pubKey.length(), pubKey.c_str(), signdata) != 0) {
+        logger_error("register publickey fail");
+        error(conn, -1, "register publickey fail");
+        delete[] signdata;
+        return false;
+    }
+    delete[] signdata;
+
+    // 向密钥协商服务器获取对称加密密钥
+    char* key = nullptr;
+    long long keylen = 0;
+    if (crypt.getKey(appid, userid, g_hostname.c_str(), key, keylen) != 0) {
+        logger_error("get clientkey fail");
+        error(conn, -1, "get clientkey fail");
+        delete[] key;
+        return false;
+    }
+
+    // 文件操作对象
+    file_c file_writer;
+    // 打开文件
+    if (file_writer.open(filepath, file_c::O_WRITE) != OK) {
+        logger_error("open file fail: %s", filepath);
+        delete[] key;
+        return ERROR;
+    }
+
+    // 依次将接收到的数据块写入文件
+    long long leftbytes = filesize; // 未接收字节数
+    char rcvbuf[STORAGE_RCVWD_SIZE]; // 接收缓冲区
+    char* dedata = nullptr; // 解密后数据
+    int datalen = 0; // 解密后数据长度
+    AesCrypto aes(key, keylen); // 初始化 AES 解密器
+
+    while (leftbytes > 0) {
+        // 接收数据
+        long long bytes = std::min(leftbytes, static_cast<long long>(sizeof(rcvbuf)));
+        long long count = conn->read(rcvbuf, bytes);
+        if (count < 0) {
+            logger_error("read fail:%s, bytes:%lld, from:%s", acl::last_serror(), bytes, conn->get_peer());
+            file_writer.close();
+            delete[] key;
+            delete[] dedata;
+            return SOCKET_ERROR;
+        }
+
+        // 使用密钥将数据解密
+        if (aes.decrypt(rcvbuf, count, dedata, datalen) != OK) {
+            logger_error("decrypt data fail");
+            file_writer.close();
+            delete[] key;
+            delete[] dedata;
+            return ERROR;
+        }
+
+        // 写入文件
+        if (file_writer.write(dedata, datalen) != OK) {
+            logger_error("write file fail: %s", filepath);
+            file_writer.close();
+            delete[] key;
+            delete[] dedata;
+            return ERROR;
+        }
+
+        // 释放解密数据缓冲区
+        delete[] dedata;
+        dedata = nullptr;
+
+        // 更新未接收字节数
+        leftbytes -= count;
+    }
+
+    // 关闭文件
+    file_writer.close();
+
+    // 数据库访问对象
+    db_c db;
+    // 连接数据库
+    if (db.connect() != OK) {
+        logger_error("connect database fail");
+        delete[] key;
+        return ERROR;
+    }
+
+    // 设置文件ID和路径及大小的对应关系
+    if (db.set(appid, userid, fileid, filepath, filesize) != OK) {
+        logger_error("insert database fail, fileid: %s", fileid);
+        file_writer.del(filepath); // 删除文件
+        delete[] key;
+        return ERROR;
+    }
+
+    // 释放密钥
+    delete[] key;
+    return OK;
+}
+
 //读取并发送文件
 int service_c::send(acl::socket_stream *conn, char const *filepath, long long offset, long long size) const
 {
@@ -469,6 +741,133 @@ int service_c::send(acl::socket_stream *conn, char const *filepath, long long of
     }
     // 关闭文件
     file.close();
+    return OK;
+}
+
+int service_c::ensend(acl::socket_stream *conn, char const *appid, char const *userid, char const *filepath, long long offset, long long size) const
+{
+    // 检查密钥对是否存在，如果不存在则生成
+    std::ifstream pubfile("./public.pem");
+    std::ifstream prifile("./private.pem");
+    if (!pubfile.good() || !prifile.good()) {
+        int ret = RsaCrypto::generateRsakey(2048);
+        if (ret != OK) {
+            logger_error("generateRsakey fail");
+            error(conn, -1, "generateRsakey fail");
+            return false;
+        }
+    }
+
+    // 读取公钥文件
+    std::ifstream filek("./public.pem");
+    if (!filek) {
+    logger_error("open file fail: ./public.pem");
+    error(conn, -1, "open file fail: ./public.pem");
+    return false;
+    }
+
+    // 使用 std::ostringstream 读取文件内容
+    std::ostringstream oss;
+    oss << filek.rdbuf(); // 将文件内容读取到 oss 中
+    std::string pubKey = oss.str(); // 转换为 std::string
+
+    // 对公钥进行签名
+    char* signdata = nullptr;
+    RsaCrypto rsa("private.pem", true, true);
+    rsa.rsaSign(pubKey.c_str(), pubKey.length(), &signdata);
+
+    // 向密钥协商服务器发送公钥注册请求
+    encrypto_c crypt;
+    if (crypt.registerPublicKey(appid, g_hostname.c_str(), pubKey.length(), pubKey.c_str(), signdata) != 0) {
+        logger_error("register publickey fail");
+        error(conn, -1, "register publickey fail");
+        delete[] signdata;
+        return false;
+    }
+    delete[] signdata;
+
+    // 向密钥协商服务器获取对称加密密钥
+    char* key = nullptr;
+    long long keylen = 0;
+    if (crypt.getKey(appid, userid, g_hostname.c_str(), key, keylen) != 0) {
+        logger_error("get clientkey fail");
+        error(conn, -1, "get clientkey fail");
+        delete[] key;
+        return false;
+    }
+
+    // 打开文件
+    file_c file;
+    if (file.open(filepath, file_c::O_READ) != OK)
+        return ERROR;
+
+    // 设置偏移
+    if (offset && file.seek(offset) != OK) {
+        file.close();
+        return ERROR;
+    }
+
+    // 构造响应头
+    long long bodylen = size;
+    long long headlen = HEADLEN;
+    char head[headlen];
+    llton(bodylen, head);
+    head[BODYLEN_SIZE] = CMD_STORAGE_REPLY;
+    head[BODYLEN_SIZE + COMMAND_SIZE] = 0;
+
+    // 发送响应头
+    if (conn->write(head, headlen) < 0) {
+        logger_error("write fail:%s, headlen:%lld, to:%s", acl::last_serror(), headlen, conn->get_peer());
+        file.close();
+        return SOCKET_ERROR;
+    }
+
+    // 加密并发送文件数据
+    long long leftbytes = size;
+    char rdbuf[STORAGE_RDSND_SIZE];
+    char* encrypted_buf = nullptr; // 加密后的数据
+    int encrypted_len = 0;         // 加密后的数据长度
+    AesCrypto aes(key, keylen);    // 初始化 AES 加密器
+
+    while (leftbytes > 0) {
+        // 读取文件数据
+        long long count = std::min(leftbytes, static_cast<long long>(sizeof(rdbuf)));
+        if (file.read(rdbuf, count) != 0) {
+            logger_error("read file fail: %s", filepath);
+            file.close();
+            delete[] key;
+            return ERROR;
+        }
+
+        // 加密数据
+        if (aes.encrypt(rdbuf, count, encrypted_buf, encrypted_len) != OK) {
+            logger_error("encrypt data fail");
+            file.close();
+            delete[] key;
+            delete[] encrypted_buf;
+            return ERROR;
+        }
+
+        // 发送加密后的数据
+        if (conn->write(encrypted_buf, encrypted_len) < 0) {
+            logger_error("write fail:%s, count:%d, to:%s", acl::last_serror(), encrypted_len, conn->get_peer());
+            file.close();
+            delete[] key;
+            delete[] encrypted_buf;
+            return SOCKET_ERROR;
+        }
+
+        // 释放加密数据缓冲区
+        delete[] encrypted_buf;
+        encrypted_buf = nullptr;
+
+        // 更新剩余字节数
+        leftbytes -= count;
+    }
+
+    // 关闭文件
+    file.close();
+    delete[] key;
     return OK;
 }
 
