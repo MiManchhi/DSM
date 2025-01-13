@@ -39,7 +39,7 @@ DEBUG_FLAGS     = -g -O0
 RELEASE_FLAGS   = -O2
 
 # 库依赖项
-LIBS            = -pthread -lacl_all
+LIBS            = -pthread -lacl_all -lssl -lcrypto
 
 # 清理命令
 RM              = rm -rf

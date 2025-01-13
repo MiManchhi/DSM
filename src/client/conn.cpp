@@ -69,6 +69,57 @@ int conn_c::saddrs(char const *appid, char const *userid, char const *fileid, st
     }
     return result;
 }
+
+//从跟踪服务器获取密钥协商服务器地址列表
+int conn_c::eaddrs(char const *appid, char const *userid, char const *fileid, std::string &eaddrs)
+{
+    //构造请求
+    // |包体长度|命令|状态|应用ID|用户ID|文件ID|
+    // |   8   | 1  | 1  |  16 | 256  | 128  |
+    long long bodylen = APPID_SIZE + USERID_SIZE + FILEID_SIZE;
+    long long requestlen = HEADLEN + bodylen;
+    char request[requestlen] = {};
+    if(makerequest(CMD_TRACKER_EADDRS,appid,userid,fileid,request) != OK)
+        return ERROR;
+    llton(bodylen, request);
+    if(!open())
+        return SOCKET_ERROR;
+    // 发送请求
+    if(m_conn->write(request,requestlen) < 0)
+    {
+        logger_error("write fail:%s, requestlen:%lld, to:%s", acl::last_serror(), requestlen, m_conn->get_peer());
+        m_errnumb = -1;
+        m_errdesc.format("write fail:%s, requestlen:%lld, to:%s", acl::last_serror(), requestlen, m_conn->get_peer());
+        close();
+        return SOCKET_ERROR;
+    }
+    // 接收响应
+    char *body = NULL;
+    int result = recvbody(&body, bodylen);
+    // 成功响应
+    //|包体长度|命令|状态|组名|密钥协商服务器地址列表|
+    //|   8   | 1  | 1  |16+1|包体长度-（16+1）|
+    if(result == OK)
+    {
+        eaddrs = body + ENCRYPT_GROUPNAME_MAX + 1;
+    }
+    // 失败响应
+    //|包体长度|命令|状态|错误号|错误描述|
+    //|   8   | 1  | 1  |  2  | <= 1024|
+    else if(result == STATUS_ERROR)
+    {
+        m_errnumb = ntos(body);
+        m_errdesc = bodylen > ERROR_NUMB_SIZE ? body + ERROR_NUMB_SIZE : "";
+    }
+    // 释放包体
+    if(body)
+    {
+        free(body);
+        body = NULL;
+    }
+    return result;
+}
+
 // 从跟踪服务器获取组列表
 int conn_c::groups(std::string &groups)
 {
@@ -240,6 +291,18 @@ int conn_c::upload(char const *appid, char const *userid, char const *fileid, ch
     }
     return result;
 }
+
+// 向存储服务器加密上传文件
+int conn_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize)
+{
+    return 0;
+}
+// 向存储服务器加密上传文件
+int conn_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filepath)
+{
+    return 0;
+}
+
 // 向存储服务器询问文件大小
 int conn_c::filesize(char const *appid, char const *userid, char const *fileid, long long &filesize)
 {
@@ -342,6 +405,13 @@ int conn_c::download(char const *appid, char const *userid, char const *fileid, 
     }
     return result;
 }
+
+// 从存储服务器加密下载文件
+int conn_c::endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize)
+{
+    return 0;
+}
+
 // 删除存储服务器上的文件
 int conn_c::del(char const *appid, char const *userid, char const *fileid)
 {
@@ -384,6 +454,18 @@ int conn_c::del(char const *appid, char const *userid, char const *fileid)
     }
     return result;
 }   
+
+// 向密钥协商服务器发送公钥注册请求
+int conn_c::registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const
+{
+    return 0;
+}
+//向密钥协商服务器发送密钥协商请求
+int conn_c::getKey(char const *appid, char const *userid, char *&key, long long &keylen) const
+{
+    return 0;
+}
+
 // 获取错误号
 short conn_c::errnumb() const
 {

@@ -321,6 +321,12 @@ bool service_c::groups(acl::socket_stream *conn) const
         logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
         return false;
     }
+    //互斥锁加锁---->组表
+    if((errno = pthread_mutex_lock(&g_encrypt_mutex)))  //pthread_mutex_lock成功返回非零值，错误返回错误号
+    {
+        logger_error("call pthread_mutex_lock fail:%s",strerror(errno));
+        return false;
+    }
     //全组字符串
     acl::string group_all;
     group_all.format(
@@ -360,9 +366,49 @@ bool service_c::groups(acl::socket_stream *conn) const
         }
         group_all += group_one.format(group_one,act); //构造全组的存储服务器
     }
+    //遍历组表中的每一个组
+    for(const auto& val:g_encrypt_groups)
+    {
+        acl::string group_one;  //单组字符串  组名 密钥协商服务器数  活动存储服务器数
+        group_one.format("GROUPNAME:%s\n""COUNT OF ENCRYPT:%lu\n""COUNT OF ACTIVE ENCRYPT:%s\n",
+        val.first.c_str(),val.second.size(),"%d");
+        int act = 0;  //活动密钥协商服务器数
+        //遍历每个组的每一台密钥协商服务器
+        for(const auto& value:val.second)
+        {
+            acl::string encrypt;//密钥协商服务器字符串：版本 主机名 IP：PORT 启动时间 加入时间 心跳时间 状态
+            encrypt.format("VERSION:%s\n""HOSTNAME:%s\n""ADDRESS:%s:%u\n""STARTUP TIME:%s""JOIN TIME:%s""BEAT TIME:%s""STATUS:",
+            value.ei_version,value.ei_hostname,value.ei_addr,value.ei_port,std::string(ctime(&value.ei_stime)).c_str(),
+            std::string(ctime(&value.ei_jtime)).c_str(),std::string(ctime(&value.ei_btime)).c_str());
+            switch (value.ei_status)
+            {
+            case ENCRYPT_STATUS_OFFLINE:
+                encrypt += "OFFLINE";
+                break;
+            case ENCRYPT_STATUS_ONLINE:
+                encrypt += "ONLINE";
+                break;
+            case ENCRYPT_STATUS_ACTIVE:
+                encrypt += "ACTIVE";
+                ++act;
+                break;
+            default:
+                encrypt += "UNKNOWN";
+                break;
+            }
+            group_one += encrypt + "\n";  //构造一个组的密钥协商服务器
+        }
+        group_all += group_one.format(group_one,act); //构造全组的存储服务器
+    }
     group_all = group_all.left(group_all.size() - 1); //去除多加的\n
     //互斥锁解锁
     if((errno = pthread_mutex_unlock(&g_mutex)))  //pthread_mutex_unlock成功返回非零值，错误返回错误号
+    {
+        logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
+        return false;
+    }
+    //互斥锁解锁
+    if((errno = pthread_mutex_unlock(&g_encrypt_mutex)))  //pthread_mutex_unlock成功返回非零值，错误返回错误号
     {
         logger_error("call pthread_mutex_unlock fail:%s",strerror(errno));
         return false;

@@ -18,6 +18,8 @@ acl::connect_manager *client_c::s_pool_manager = nullptr;
 std::vector<std::string> client_c::s_taddrs;
 // 存储服务器连接池容量
 int client_c::s_scount = 8;
+// 密钥协商服务器连接池容量
+int client_c::s_ecount = 8;
 
 client_c::client_c()
 {
@@ -133,6 +135,68 @@ int client_c::saddrs(char const *appid, char const *userid, char const *fileid, 
                 else
                 {
                     logger_warn("get storage addresses fail :%s", tconn->errdesc());
+                    tpool->put(tconn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
+//从跟踪服务器获取密钥协商服务器地址列表
+int client_c::eaddrs(char const *appid, char const *userid, char const *fileid, std::string &eaddrs)
+{
+    //检查密钥协商服务器地址列表
+    if(s_taddrs.empty())
+    {
+        logger_error("tracker server addresses is empty");
+        return ERROR;
+    }
+    int result = ERROR;
+    // 生成有限随机数
+    srand(time(NULL));
+    int ntaddrs = s_taddrs.size();
+    int nrand = rand() % ntaddrs;
+    // 随机抽取一个跟踪服务器地址
+    for (int i = 0; i < ntaddrs; ++i)
+    {
+        char const *taddr = s_taddrs[i].c_str();
+        nrand = (nrand + 1) % ntaddrs;
+        // 获取跟踪服务器连接池
+        pool_c *tpool = dynamic_cast<pool_c *>(s_pool_manager->get(taddr));
+        if(!tpool)
+        {
+            logger_warn("tracker connection pool is null,taddr:%s", taddr);
+            continue;  //尝试使用下一个地址
+        }
+        for (int j = 0; j < MAX_SOCKERRS; ++j)
+        {
+            // 获取一个跟踪服务器连接
+            conn_c *tconn = dynamic_cast<conn_c *>(tpool->peek());
+            if(!tconn)
+            {
+                logger_warn("tracker connection is null, taddr: %s",taddr);
+                break; //连接池里取连接失败，退出本层循环重新获取连接池
+            }
+            // 从跟踪服务器获取密钥协商服务器地址列表
+            logger("get encrypt server addresses attempt #%d, appid:%s, userid:%s, fileid:%s", 
+            i + 1, appid, userid, fileid);
+            result = tconn->eaddrs(appid, userid, fileid, eaddrs);
+            if(result == SOCKET_ERROR)
+            {
+                logger_warn("get encrypt addresses fail :%s", tconn->errdesc());
+                tpool->put(tconn, false);
+            }
+            else
+            {
+                if(result == OK)
+                {
+                    tpool->put(tconn, true);
+                }
+                else
+                {
+                    logger_warn("get encrypt addresses fail :%s", tconn->errdesc());
                     tpool->put(tconn, false);
                 }
                 return result;
@@ -382,6 +446,17 @@ int client_c::upload(char const *appid, char const *userid, char const *fileid, 
     return result;
 }
 
+// 向存储服务器加密上传文件
+int client_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize)
+{
+    return 0;
+}
+// 向存储服务器加密上传文件
+int client_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filepath)
+{
+    return 0;
+}
+
 // 向存储服务器询问文件大小
 int client_c::filesize(char const *appid, char const *userid, char const *fileid, long long &filesize)
 {
@@ -550,6 +625,12 @@ int client_c::download(char const *appid, char const *userid, char const *fileid
     return result;
 }
 
+// 从存储服务器加密下载文件
+int client_c::endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize)
+{
+    return 0;
+}
+
 // 删除存储服务器上的文件
 int client_c::del(char const *appid, char const *userid, char const *fileid)
 {
@@ -634,3 +715,13 @@ int client_c::del(char const *appid, char const *userid, char const *fileid)
     return result;
 }   
 
+// 向密钥协商服务器发送公钥注册请求
+int client_c::registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const
+{
+    return 0;
+}
+//向密钥协商服务器发送密钥协商请求
+int client_c::getKey(char const *appid, char const *userid, char *&key, long long &keylen) const
+{
+    return 0;
+}

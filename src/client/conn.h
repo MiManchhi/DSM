@@ -13,18 +13,30 @@ public:
 public:
     //从跟踪服务器获取存储服务器地址列表
     int saddrs(char const *appid, char const *userid, char const *fileid, std::string &saddrs);
+    //从跟踪服务器获取密钥协商服务器地址列表
+    int eaddrs(char const *appid, char const *userid, char const *fileid, std::string &eaddrs);
     // 从跟踪服务器获取组列表
     int groups(std::string &groups);
     // 向存储服务器上传文件
     int upload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize);
     // 向存储服务器上传文件
     int upload(char const *appid, char const *userid, char const *fileid, char const *filepath);
+    // 向存储服务器加密上传文件
+    int enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize);
+    // 向存储服务器加密上传文件
+    int enupload(char const *appid, char const *userid, char const *fileid, char const *filepath);
     // 向存储服务器询问文件大小
     int filesize(char const *appid, char const *userid, char const *fileid, long long &filesize);
     // 从存储服务器下载文件
     int download(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize);
+    // 从存储服务器加密下载文件
+    int endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize);
     // 删除存储服务器上的文件
     int del(char const *appid, char const *userid, char const *fileid);
+    // 向密钥协商服务器发送公钥注册请求
+    int registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const;
+    //向密钥协商服务器发送密钥协商请求
+    int getKey(char const *appid, char const *userid, char *&key, long long &keylen) const;
     // 获取错误号
     short errnumb() const;
     // 获取错误描述
