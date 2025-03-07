@@ -57,7 +57,7 @@ int db_c::ClientPublicKey(const char *userid, std::string &publicKey) const
     // 缓存中没有从数据库中获取
     // 根据userid获取客户端公钥
     acl::string sql;
-    sql.format("SELECT PublicKey FORM clientkeys WHERE UserID='%s';", userid);
+    sql.format("SELECT PublicKey FROM clientkeys WHERE UserID='%s';", userid);
     // 执行sql
     if(mysql_query(m_mysql,sql.c_str()))
     {
@@ -139,7 +139,7 @@ int db_c::ServerPublicKey(const char *serverid, std::string &publicKey) const
     // 缓存中没有从数据库中获取
     // 根据serverid获存储服务器公钥
     acl::string sql;
-    sql.format("SELECT PublicKey FORM serverkeys WHERE ServerID='%s';", serverid);
+    sql.format("SELECT PublicKey FROM serverkeys WHERE ServerID='%s';", serverid);
     // 执行sql
     if(mysql_query(m_mysql,sql.c_str()))
     {
@@ -229,7 +229,8 @@ int db_c::Addsession(const char *userid, const char *serverid, const std::string
 
 int db_c::ClientKey(const char *userid, std::string &Key) const
 {
-    //先尝试从缓存中拿
+    logger("enter ClientKey");
+    // 先尝试从缓存中拿
     cache_c cache;
     acl::string key;
     key.format("uid:key:%s", userid);
@@ -240,10 +241,11 @@ int db_c::ClientKey(const char *userid, std::string &Key) const
         Key = std::string(value.c_str());
         return OK;
     }
+    logger("enter ClientKey 1");
     // 缓存中没有从数据库中获取
     // 根据userid获取客户端密钥
     acl::string sql;
-    sql.format("SELECT PrivateKey FORM clientprivatekeys WHERE UserID='%s';", userid);
+    sql.format("SELECT PrivateKey FROM clientprivatekeys WHERE UserID='%s';", userid);
     // 执行sql
     if(mysql_query(m_mysql,sql.c_str()))
     {
@@ -272,11 +274,13 @@ int db_c::ClientKey(const char *userid, std::string &Key) const
     {
         logger_error("set key_value to cache fail:key:%s, value:%s", key.c_str(), value.c_str());
     }
+    logger("enter ClientKey 2");
     return OK;
 }
 int db_c::setClientKey(const char *userid, const std::string &Key) const
 {
     //查询客户端对应的密钥是否存在如果存在则直接返回，不存在则插入
+    logger("enter setClientKey");
     std::string temp;
     if (ClientKey(userid, temp) == OK)
         return OK;
@@ -288,6 +292,7 @@ int db_c::setClientKey(const char *userid, const std::string &Key) const
         logger_error("insert database fail:%s, sql:%s", mysql_error(m_mysql), sql.c_str());
         return ERROR;
     }
+    logger("enter setClientKey 1");
     // 检查插入结果
     MYSQL_RES *res = mysql_store_result(m_mysql);
     if(!res && mysql_field_count(m_mysql))

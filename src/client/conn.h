@@ -22,21 +22,21 @@ public:
     // 向存储服务器上传文件
     int upload(char const *appid, char const *userid, char const *fileid, char const *filepath);
     // 向存储服务器加密上传文件
-    int enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize);
+    int enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize, const long long &keylen, char const *key);
     // 向存储服务器加密上传文件
-    int enupload(char const *appid, char const *userid, char const *fileid, char const *filepath);
+    int enupload(char const *appid, char const *userid, char const *fileid, char const *filepath, const long long &keylen, char const *key);
     // 向存储服务器询问文件大小
     int filesize(char const *appid, char const *userid, char const *fileid, long long &filesize);
     // 从存储服务器下载文件
     int download(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize);
     // 从存储服务器加密下载文件
-    int endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize);
+    int endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize, const long long &keylen, char const *key);
     // 删除存储服务器上的文件
     int del(char const *appid, char const *userid, char const *fileid);
     // 向密钥协商服务器发送公钥注册请求
-    int registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const;
+    int registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata);
     //向密钥协商服务器发送密钥协商请求
-    int getKey(char const *appid, char const *userid, char *&key, long long &keylen) const;
+    int getKey(char const *appid, char const *userid, char *&key, long long &keylen);
     // 获取错误号
     short errnumb() const;
     // 获取错误描述

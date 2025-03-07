@@ -12,15 +12,19 @@ void usage(char const* cmd)
     /*
         ./client 127.0.0.1:21000 groups
         ./client 127.0.0.1:21000 upload <appid> <userid> <filepath>
+        ./client 127.0.0.1:21000 enupload <appid> <userid> <filepath>
         ./client 127.0.0.1:21000 filesize <appid> <userid> <fileid>
         ./client 127.0.0.1:21000 download <appid> <userid> <fileid> <offset> <size>
+        ./client 127.0.0.1:21000 endownload <appid> <userid> <fileid> <offset> <size>
         ./client 127.0.0.1:21000 delete <appid> <userid> <fileid>
     */
     fprintf(stderr, "Groups : %s <taddrs> groups\n", cmd);
     fprintf(stderr, "Upload : %s <taddrs> upload <appid> <userid> <filepath>\n", cmd);
+    fprintf(stderr, "Enupload : %s <taddrs> enupload <appid> <userid> <filepath>\n", cmd);
     fprintf(stderr, "Filesize : %s <taddrs> filesize <appid> <userid> <fileid>\n", cmd);
-    fprintf(stderr, "download : %s <taddrs> download <appid> <userid> <fileid> <offset> <size>\n", cmd);
-    fprintf(stderr, "delete : %s <taddrs> delete <appid> <userid> <fileid>\n", cmd);
+    fprintf(stderr, "Download : %s <taddrs> download <appid> <userid> <fileid> <offset> <size>\n", cmd);
+    fprintf(stderr, "Endownload : %s <taddrs> endownload <appid> <userid> <fileid> <offset> <size>\n", cmd);
+    fprintf(stderr, "Delete : %s <taddrs> delete <appid> <userid> <fileid>\n", cmd);
 }
 
 //根据用户ID生成文件ID
@@ -59,7 +63,9 @@ std::unordered_map<std::string, int> cmd_index =
     {"upload",1},
     {"filesize",2},
     {"download",3},
-    {"delete",4}
+    {"delete",4},
+    {"endownload",5},
+    {"enupload",6}
 };
 
 //从跟踪服务器获取组列表
@@ -95,6 +101,29 @@ int client_upload(int argc, char *argv[], client_c &client)
         return -1;
     }
     printf("Upload success :%s\n", fileid.c_str());
+    return 0;
+}
+
+// 向存储服务器加密上传文件
+int client_enupload(int argc, char *argv[], client_c &client)
+{
+    char const *cmd = argv[0];
+    if(argc < 6)
+    {
+        client_c::deinit();
+        usage(cmd);
+        return -1;
+    }
+    char const *appid = argv[3];
+    char const *userid = argv[4];
+    char const *filepath = argv[5];
+    std::string fileid = genfileid(userid);
+    if(client.enupload(appid,userid,fileid.c_str(),filepath) != OK)
+    {
+        client_c::deinit();
+        return -1;
+    }
+    printf("Enupload success :%s\n", fileid.c_str());
     return 0;
 }
 
@@ -144,6 +173,34 @@ int client_download(int argc, char *argv[], client_c &client)
         return -1;
     }
     printf("Download file success :%lld\n", filesize);
+    //这里只是测试，实际需要使用下载到的数据，如写入文件，使用后需要释放
+    free(filedata);
+    return 0;
+}
+
+// 从存储服务器加密下载文件
+int client_endownload(int argc, char *argv[], client_c &client)
+{
+    char const *cmd = argv[0];
+    if(argc < 8)
+    {
+        client_c::deinit();
+        usage(cmd);
+        return -1;
+    }
+    char const *appid = argv[3];
+    char const *userid = argv[4];
+    char const *fileid = argv[5];
+    long long offset = atoll(argv[6]);
+    long long size = atoll(argv[7]);
+    char *filedata = NULL;
+    long long filesize = 0;
+    if (client.endownload(appid,userid,fileid,offset,size,&filedata,filesize) != OK)
+    {
+        client_c::deinit();
+        return -1;
+    }
+    printf("Endownload file success :%lld\n", filesize);
     //这里只是测试，实际需要使用下载到的数据，如写入文件，使用后需要释放
     free(filedata);
     return 0;
@@ -215,6 +272,14 @@ int main(int argc, char *argv[])
     case 4 :
         // 删除存储服务器上的文件
         client_delete(argc, argv, client);
+        break;
+    case 5 :
+        // 从存储服务器加密下载文件
+        client_endownload(argc, argv, client);
+        break;
+    case 6 :
+        // 向存储服务器加密上传文件
+        client_enupload(argc, argv, client);
         break;
     default:
         client_c::deinit();

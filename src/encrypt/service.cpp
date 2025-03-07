@@ -82,7 +82,7 @@ bool service_c::clientRegisterPublicKey(acl::socket_stream *conn, long long body
     RsaCrypto rsa(publicKey, false, false);
     // 校验签名
     bool isValid = false;
-    rsa.rsaVerify(publicKey, strlen(publicKey), signData, isValid);
+    rsa.rsaVerify(publicKey, strlen(publicKey) + 1, signData, isValid);
     if (!isValid)
     {
         logger_error("rsaVerify is fail,userid:%s, publicKey:%s", userid, publicKey);
@@ -137,7 +137,7 @@ bool service_c::serverRegisterPublicKey(acl::socket_stream *conn, long long body
     RsaCrypto rsa(publicKey, false, false);
     // 校验签名
     bool isValid = false;
-    rsa.rsaVerify(publicKey, strlen(publicKey), signData, isValid);
+    rsa.rsaVerify(publicKey, strlen(publicKey) + 1, signData, isValid);
     if (!isValid)
     {
         logger_error("rsaVerify is fail,serverid:%s, publicKey:%s", serverid, publicKey);
@@ -201,21 +201,44 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
     if (db.ClientKey(userid, key) != OK)
     {
         char *tempkey = nullptr;
-        AesCrypto::generateKey(16, tempkey, keylen);
+        if(AesCrypto::generateKey(16, tempkey, keylen) != 0)
+        {
+            logger_error("generateKey fail");
+            return false;
+        }
         key = std::string(tempkey);
+        logger("ClientKey:%s", tempkey);
+        logger("ClientKey:%s", key.c_str());
         // 将密钥和userid进行绑定并存储
         if(db.setClientKey(userid,key) != OK)
         {
             logger_error("clientKeyNego::write database fail,userid:%s", userid);
             error(conn, -1, "write database fail, userid:%s", userid);
+            delete[] tempkey;
             return false;
         }
+        delete[] tempkey;
     }
+    logger("database operation finish");
     // rsa类对象
+    logger("use clientPublicKey encypyt :clientPublicKey:%s", clientKey.c_str());
     RsaCrypto rsa(clientKey.c_str(), false, false);
     // 使用客户端公钥加密aes密钥
     char* EnKey = nullptr;
-    rsa.rsaPubKeyEncrypt(key.c_str(), strlen(key.c_str()), &EnKey);
+    rsa.rsaPubKeyEncrypt(key.c_str(), key.length() + 1, &EnKey);
+    logger("enter clientKeyNego 1");
+    logger("EnKey:%s, EnKeylen:%ld", EnKey, strlen(EnKey) + 1);
+    //测试 ---  使用客户端私钥验证解密释放成功
+    RsaCrypto testrsa("client_private.pem", true, true);
+    char **dekey = nullptr;
+    int dekeylen = 0;
+    logger("key:%s", key);
+    if(rsa.rsaPriKeyDecrypt(EnKey, dekey, dekeylen) != OK)
+    {
+        logger_error("decrypt key fail");
+        return ERROR;
+    }
+    delete[] *dekey;
     // 构造响应
     //  |包体长度|命令|状态|密钥长度|密钥|
     //  |   8   | 1  | 1  |  8    | 16 |
@@ -225,8 +248,9 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
     llton(bodylen, respond);
     respond[BODYLEN_SIZE] = CMD_KEYNEGO_SERVEER_REPLY;
     respond[BODYLEN_SIZE + COMMAND_SIZE] = 0;
-    llton(key.length(), respond + HEADLEN);
+    llton(strlen(EnKey) + 1, respond + HEADLEN);
     strcpy(respond + HEADLEN + KEY_SIZE, EnKey);
+    logger("enter clientKeyNego 2");
     // 将加密后的密钥给客户端
     if(conn->write(respond,respondlen) < 0)
     {
@@ -235,6 +259,7 @@ bool service_c::clientKeyNego(acl::socket_stream *conn, long long bodylen) const
     }
     //释放加密后的密钥
     delete[] EnKey;
+    logger("enter clientKeyNego 3");
     return true;
 }
 // 处理来自存储服务器的密钥协商请求

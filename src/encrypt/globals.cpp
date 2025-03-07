@@ -23,7 +23,7 @@ int cfg_ctimeout;                  //Redis连接超时
 int cfg_rtimeout;                  //Redis读写超时
 int cfg_ktimeout;                  //Redis键超时
 acl::master_int_tbl cfg_int[] = {  // 整形配置表
-    {"dsm_storage_port", 23000, &cfg_bindport, 0, 0},
+    {"dsm_encrypt_port", 24000, &cfg_bindport, 0, 0},
     {"dsm_heart_beat_interval", 10, &cfg_interval, 0, 0},
     {"mysql_rw_timeout", 30, &cfg_mtimeout, 0, 0},
     {"redis_max_conn_num", 600, &cfg_maxconns, 0, 0},

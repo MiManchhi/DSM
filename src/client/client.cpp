@@ -1,12 +1,16 @@
 //客户机
 //实现客户机类
 #include <acl-lib/acl/lib_acl.h>
+#include <fstream>
+#include <sstream>
 #include "types.h"
 #include "util.h"
 #include "conn.h"
 #include "pool_manager.h"
 #include "client.h"
 #include "pool.h"
+#include "rsacrypto.h"
+#include "aescrypto.h"
 
 //套接字通信最大错误数
 const int MAX_SOCKERRS = 10;
@@ -147,7 +151,7 @@ int client_c::saddrs(char const *appid, char const *userid, char const *fileid, 
 //从跟踪服务器获取密钥协商服务器地址列表
 int client_c::eaddrs(char const *appid, char const *userid, char const *fileid, std::string &eaddrs)
 {
-    //检查密钥协商服务器地址列表
+    //检查跟踪服务器地址列表
     if(s_taddrs.empty())
     {
         logger_error("tracker server addresses is empty");
@@ -449,12 +453,198 @@ int client_c::upload(char const *appid, char const *userid, char const *fileid, 
 // 向存储服务器加密上传文件
 int client_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filedata, long long filesize)
 {
-    return 0;
+    //检查参数
+    if(!appid || !strlen(appid))
+    {
+        logger_error("appid is null");
+        return ERROR;
+    }
+    if(!userid || !strlen(userid))
+    {
+        logger_error("userid is null");
+        return ERROR;
+    }
+    if(!fileid || !strlen(fileid))
+    {
+        logger_error("fileid is null");
+        return ERROR;
+    }
+    if(!filedata || !filesize)
+    {
+        logger_error("filedata is null");
+        return ERROR;
+    }
+    //向密钥协商服务器发送公钥注册请求
+    if(registerPublicKey(appid,userid,fileid) != OK)
+        return ERROR;
+    //向密钥协商服务器发送密钥协商请求
+    char *key = nullptr;
+    long long keylen = 0;
+    if(getKey(appid, userid, fileid, key, keylen) != OK)
+        return ERROR;
+    //从跟踪服务器获取存储服务器地址列表
+    int result;
+    std::string ssaddrs;
+    if((result = saddrs(appid,userid,fileid,ssaddrs)) != OK)
+    {
+        logger_error("storage server addresses is null");
+        delete[] key;
+        return result;
+    }
+    std::vector<std::string> vsaddrs;
+    splitstring(ssaddrs.c_str(), vsaddrs);
+    if(vsaddrs.empty())
+    {
+        logger_error("storage server addresses is empty");
+        delete[] key;
+        return ERROR;
+    }
+    result = ERROR;
+    // 遍历存储服务器地址列表尝试创建存储服务器连接池
+    for(const auto& saddr : vsaddrs)
+    {
+        //尝试创建存储服务器连接池
+        pool_c *spool = dynamic_cast<pool_c *>(s_pool_manager->get(saddr.c_str()));
+        if(!spool)
+        {
+            //如果当前地址没有连接池也可能是没有创建，创建后再次获取连接池
+            s_pool_manager->set(saddr.c_str(), s_scount);
+            if(!(spool = dynamic_cast<pool_c*>(s_pool_manager->get(saddr.c_str()))))
+            {
+                logger_warn("storage server connection pool is null saddr:%s",saddr.c_str());
+                continue;
+            }
+        }
+        // 获取存储服务器连接
+        for (int i = 0; i < MAX_SOCKERRS; ++i)
+        {
+            conn_c *sconn = dynamic_cast<conn_c *>(spool->peek());
+            if(!sconn)
+            {
+                logger_error("storage server connection is null saddr:%s",saddr.c_str());
+                break;
+            }
+            // 向存储服务器加密上传文件
+            logger("upload attempt #%d, saddr:%s, appid:%s, userid:%s, fileid:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid);
+            result = sconn->enupload(appid, userid, fileid, filedata, filesize, keylen, key);
+            delete[] key;
+            if(result == SOCKET_ERROR)
+            {
+                logger_warn("enupload file fail:%s",sconn->errdesc());
+                spool->put(sconn, false);
+            }
+            else
+            {
+                if(result == OK)
+                    spool->put(sconn, true);
+                else
+                {
+                    logger_error("enupload file fail:%s", sconn->errdesc());
+                    spool->put(sconn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
 }
 // 向存储服务器加密上传文件
 int client_c::enupload(char const *appid, char const *userid, char const *fileid, char const *filepath)
 {
-    return 0;
+    //检查参数
+    if(!appid || !strlen(appid))
+    {
+        logger_error("appid is null");
+        return ERROR;
+    }
+    if(!userid || !strlen(userid))
+    {
+        logger_error("userid is null");
+        return ERROR;
+    }
+    if(!fileid || !strlen(fileid))
+    {
+        logger_error("fileid is null");
+        return ERROR;
+    }
+    if(!filepath || !strlen(filepath))
+    {
+        logger_error("filepath is null");
+        return ERROR;
+    }
+    //向密钥协商服务器发送公钥注册请求
+    if(registerPublicKey(appid,userid,fileid) != OK)
+        return ERROR;
+    //向密钥协商服务器发送密钥协商请求
+    char *key = nullptr;
+    long long keylen = 0;
+    if(getKey(appid, userid, fileid, key, keylen) != OK)
+        return ERROR;
+    //从跟踪服务器获取存储服务器地址列表
+    int result;
+    std::string ssaddrs;
+    if((result = saddrs(appid,userid,fileid,ssaddrs)) != OK)
+    {
+        logger_error("storage server addresses is null");
+        return result;
+    }
+    std::vector<std::string> vsaddrs;
+    splitstring(ssaddrs.c_str(), vsaddrs);
+    if(vsaddrs.empty())
+    {
+        logger_error("storage server addresses is empty");
+        return ERROR;
+    }
+    result = ERROR;
+    // 遍历存储服务器地址列表尝试创建存储服务器连接池
+    for(const auto& saddr : vsaddrs)
+    {
+        //尝试创建存储服务器连接池
+        pool_c *spool = dynamic_cast<pool_c *>(s_pool_manager->get(saddr.c_str()));
+        if(!spool)
+        {
+            //如果当前地址没有连接池也可能是没有创建，创建后再次获取连接池
+            s_pool_manager->set(saddr.c_str(), s_scount);
+            if(!(spool = dynamic_cast<pool_c*>(s_pool_manager->get(saddr.c_str()))))
+            {
+                logger_warn("storage server connection pool is null saddr:%s",saddr.c_str());
+                continue;
+            }
+        }
+        // 获取存储服务器连接
+        for (int i = 0; i < MAX_SOCKERRS; ++i)
+        {
+            conn_c *sconn = dynamic_cast<conn_c *>(spool->peek());
+            if(!sconn)
+            {
+                logger_error("storage server connection is null saddr:%s",saddr.c_str());
+                break;
+            }
+            // 向存储服务器加密上传文件
+            logger("upload attempt #%d, saddr:%s, appid:%s, userid:%s, fileid:%s, filepath:%s", 
+            i + 1, saddr.c_str(), appid, userid, fileid, filepath);
+            result = sconn->enupload(appid, userid, fileid, filepath, keylen, key);
+            delete[] key;
+            if(result == SOCKET_ERROR)
+            {
+                logger_warn("enupload file fail:%s",sconn->errdesc());
+                spool->put(sconn, false);
+            }
+            else
+            {
+                if(result == OK)
+                    spool->put(sconn, true);
+                else
+                {
+                    logger_error("enupload file fail:%s", sconn->errdesc());
+                    spool->put(sconn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
 }
 
 // 向存储服务器询问文件大小
@@ -628,7 +818,93 @@ int client_c::download(char const *appid, char const *userid, char const *fileid
 // 从存储服务器加密下载文件
 int client_c::endownload(char const *appid, char const *userid, char const *fileid, long long offset, long long size, char **filedata, long long &filesize)
 {
-    return 0;
+    //检查参数
+    if(!appid || !strlen(appid))
+    {
+        logger_error("appid is null");
+        return ERROR;
+    }
+    if(!userid || !strlen(userid))
+    {
+        logger_error("userid is null");
+        return ERROR;
+    }
+    if(!fileid || !strlen(fileid))
+    {
+        logger_error("fileid is null");
+        return ERROR;
+    }
+    //向密钥协商服务器发送公钥注册请求
+    if(registerPublicKey(appid,userid,fileid) != OK)
+        return ERROR;
+    //向密钥协商服务器发送密钥协商请求
+    char *key = nullptr;
+    long long keylen = 0;
+    if(getKey(appid, userid, fileid, key, keylen) != OK)
+        return ERROR;
+    //从跟踪服务器获取存储服务器地址列表
+    int result;
+    std::string ssaddrs;
+    if((result = saddrs(appid,userid,fileid,ssaddrs)) != OK)
+    {
+        logger_error("storage server addresses is null");
+        return result;
+    }
+    std::vector<std::string> vsaddrs;
+    splitstring(ssaddrs.c_str(), vsaddrs);
+    if(vsaddrs.empty())
+    {
+        logger_error("storage server addresses is empty");
+        return ERROR;
+    }
+    result = ERROR;
+    // 遍历存储服务器地址列表尝试创建存储服务器连接池
+    for(const auto& saddr : vsaddrs)
+    {
+        //尝试创建存储服务器连接池
+        pool_c *spool = dynamic_cast<pool_c *>(s_pool_manager->get(saddr.c_str()));
+        if(!spool)
+        {
+            //如果当前地址没有连接池也可能是没有创建，创建后再次获取连接池
+            s_pool_manager->set(saddr.c_str(), s_scount);
+            if(!(spool = dynamic_cast<pool_c*>(s_pool_manager->get(saddr.c_str()))))
+            {
+                logger_warn("storage server connection pool is null saddr:%s",saddr.c_str());
+                continue;
+            }
+        }
+        // 获取存储服务器连接
+        for (int i = 0; i < MAX_SOCKERRS; ++i)
+        {
+            conn_c *sconn = dynamic_cast<conn_c *>(spool->peek());
+            if(!sconn)
+            {
+                logger_error("storage server connection is null saddr:%s",saddr.c_str());
+                break;
+            }
+            // 从存储服务器下载文件
+            logger("endownload file #%d, saddr:%s, appid:%s, userid:%s, fileid:%s, offset:%lld, size:%lld", 
+            i + 1, saddr.c_str(), appid, userid, fileid, offset, size);
+            result = sconn->endownload(appid, userid, fileid, offset, size, filedata, filesize, keylen, key);
+            if (result == SOCKET_ERROR)
+            {
+                logger_warn("endownload file fail:%s",sconn->errdesc());
+                spool->put(sconn, false);
+            }
+            else
+            {
+                if(result == OK)
+                    spool->put(sconn, true);
+                else
+                {
+                    logger_error("endownload file fail:%s", sconn->errdesc());
+                    spool->put(sconn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
 }
 
 // 删除存储服务器上的文件
@@ -716,12 +992,235 @@ int client_c::del(char const *appid, char const *userid, char const *fileid)
 }   
 
 // 向密钥协商服务器发送公钥注册请求
-int client_c::registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const
+int client_c::registerPublicKey(char const *appid, char const *userid, const char * fileid)
 {
-    return 0;
+    //检查参数
+    if(!appid || !strlen(appid))
+    {
+        logger_error("appid is null");
+        return ERROR;
+    }
+    if(!userid || !strlen(userid))
+    {
+        logger_error("userid is null");
+        return ERROR;
+    }
+    if(!fileid || !strlen(fileid))
+    {
+        logger_error("fileid is null");
+        return ERROR;
+    }
+    // 检查密钥对是否存在，如果不存在则生成
+    std::ifstream pubfile("./client_public.pem");
+    std::ifstream prifile("./client_private.pem");
+    if (!pubfile.good() || !prifile.good()) {
+        int ret = RsaCrypto::generateRsakey(2048, "client_public.pem", "client_private.pem");
+        if (ret != OK) {
+            logger_error("generateRsakey fail");
+            return ERROR;
+        }
+    }
+
+    // 读取公钥文件
+    std::ifstream filek("./client_public.pem");
+    if (!filek) {
+    logger_error("open file fail: ./client_public.pem");
+    return ERROR;
+    }
+
+    // 使用 std::ostringstream 读取文件内容
+    std::ostringstream oss;
+    oss << filek.rdbuf(); // 将文件内容读取到 oss 中
+    std::string pubKey = oss.str(); // 转换为 std::string
+
+    // 对公钥进行签名
+    char* signdata = nullptr;
+    RsaCrypto rsa("client_private.pem", true, true);
+    rsa.rsaSign(pubKey.c_str(), pubKey.length() + 1, &signdata);
+
+    //从跟踪服务器获取密钥协商服务器地址列表
+    int result;
+    std::string seaddr;
+    if((result = eaddrs(appid,userid,fileid,seaddr)) != OK)
+    {
+        logger_error("encrypt server addresses is null");
+        delete[] signdata;
+        return result;
+    }
+    std::vector<std::string> veaddrs;
+    splitstring(seaddr.c_str(), veaddrs);
+    if(veaddrs.empty())
+    {
+        logger_error("encrypt server addresses is empty");
+        delete[] signdata;
+        return ERROR;
+    }
+    result = ERROR;
+    // 遍历密钥协商服务器地址列表尝试创建密钥协商服务器连接池
+    for(const auto& eaddr : veaddrs)
+    {
+        //尝试创建密钥协商服务器连接池
+        pool_c *epool = dynamic_cast<pool_c *>(s_pool_manager->get(eaddr.c_str()));
+        if(!epool)
+        {
+            //如果当前地址没有连接池也可能是没有创建，创建后再次获取连接池
+            s_pool_manager->set(eaddr.c_str(), s_ecount);
+            if(!(epool = dynamic_cast<pool_c*>(s_pool_manager->get(eaddr.c_str()))))
+            {
+                logger_warn("encrypt server connection pool is null eaddr:%s",eaddr.c_str());
+                continue;
+            }
+        }
+        // 获取密钥协商服务器连接
+        for (int i = 0; i < MAX_SOCKERRS; ++i)
+        {
+            conn_c *econn = dynamic_cast<conn_c *>(epool->peek());
+            if(!econn)
+            {
+                logger_error("encrypt server connection is null eaddr:%s",eaddr.c_str());
+                break;
+            }
+            // 向密钥协商服务器发送公钥注册请求
+            logger("register publickey attempt #%d, eaddr:%s, appid:%s, userid:%s, fileid:%s", 
+            i + 1, eaddr.c_str(), appid, userid, fileid);
+            result = econn->registerPublicKey(appid, userid, pubKey.length() + 1, pubKey.c_str(), signdata);
+            logger("publicKey:%s, PublicKeyLen:%ld, signdata:%s, signdatalen:%ld", pubKey.c_str(), pubKey.length() + 1, signdata, strlen(signdata) + 1);
+            //delete[] signdata;
+            if(result == SOCKET_ERROR)
+            {
+                logger_warn("register public fail:%s",econn->errdesc());
+                epool->put(econn, false);
+            }
+            else
+            {
+                if(result == OK)
+                    epool->put(econn, true);
+                else
+                {
+                    logger_error("register public fail:%s", econn->errdesc());
+                    epool->put(econn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
 }
 //向密钥协商服务器发送密钥协商请求
-int client_c::getKey(char const *appid, char const *userid, char *&key, long long &keylen) const
+int client_c::getKey(char const *appid, char const *userid, const char *fileid, char *&key, long long &keylen)
 {
-    return 0;
+    //检查参数
+    if(!appid || !strlen(appid))
+    {
+        logger_error("appid is null");
+        return ERROR;
+    }
+    if(!userid || !strlen(userid))
+    {
+        logger_error("userid is null");
+        return ERROR;
+    }
+    if(!fileid || !strlen(fileid))
+    {
+        logger_error("fileid is null");
+        return ERROR;
+    }
+    // 检查密钥对是否存在
+    std::ifstream pubfile("./client_public.pem");
+    std::ifstream prifile("./client_private.pem");
+    if (!pubfile.good() || !prifile.good()) {
+            logger_error("rsa key pair not exits");
+            return ERROR;
+    }
+
+    RsaCrypto rsa("client_private.pem", true, true);
+
+    //从跟踪服务器获取密钥协商服务器地址列表
+    int result;
+    std::string seaddr;
+    if((result = eaddrs(appid,userid,fileid,seaddr)) != OK)
+    {
+        logger_error("encrypt server addresses is null");
+        delete[] key;
+        return result;
+    }
+    std::vector<std::string> veaddrs;
+    splitstring(seaddr.c_str(), veaddrs);
+    if(veaddrs.empty())
+    {
+        logger_error("encrypt server addresses is empty");
+        delete[] key;
+        return ERROR;
+    }
+    result = ERROR;
+    // 遍历密钥协商服务器地址列表尝试创建密钥协商服务器连接池
+    for(const auto& eaddr : veaddrs)
+    {
+        //尝试创建密钥协商服务器连接池
+        pool_c *epool = dynamic_cast<pool_c *>(s_pool_manager->get(eaddr.c_str()));
+        if(!epool)
+        {
+            //如果当前地址没有连接池也可能是没有创建，创建后再次获取连接池
+            s_pool_manager->set(eaddr.c_str(), s_ecount);
+            if(!(epool = dynamic_cast<pool_c*>(s_pool_manager->get(eaddr.c_str()))))
+            {
+                logger_warn("encrypt server connection pool is null eaddr:%s",eaddr.c_str());
+                continue;
+            }
+        }
+        // 获取密钥协商服务器连接
+        for (int i = 0; i < MAX_SOCKERRS; ++i)
+        {
+            conn_c *econn = dynamic_cast<conn_c *>(epool->peek());
+            if(!econn)
+            {
+                logger_error("encrypt server connection is null eaddr:%s",eaddr.c_str());
+                break;
+            }
+            // 向密钥协商服务器发送密钥协商
+            logger("key nego attempt #%d, eaddr:%s, appid:%s, userid:%s", 
+            i + 1, eaddr.c_str(), appid, userid);
+            result = econn->getKey(appid, userid, key, keylen);
+            logger("Received Key (Base64): %s", key);
+            logger("Received Key Length: %lld", keylen);
+
+            //将密钥进行解密
+            char **dekey = nullptr;
+            int dekeylen = 0;
+            logger("key:%s", key);
+            if(rsa.rsaPriKeyDecrypt(key, dekey, dekeylen) != OK)
+            {
+                logger_error("decrypt key fail");
+                delete[] key;
+                return ERROR;
+            }
+            delete[] key;
+            key = nullptr;
+            key = *dekey;
+            keylen = dekeylen;
+
+            //测试
+            // key = "U8nkUMVBr0IIXWQ9Jc/KEA==";
+            // keylen = strlen(key);
+
+            logger("dekey:%s, dekeylen:%lld", key, keylen);
+            if(result == SOCKET_ERROR)
+            {
+                logger_warn("key nego fail:%s",econn->errdesc());
+                epool->put(econn, false);
+            }
+            else
+            {
+                if(result == OK)
+                    epool->put(econn, true);
+                else
+                {
+                    logger_error("key nego fail:%s", econn->errdesc());
+                    epool->put(econn, false);
+                }
+                return result;
+            }
+        }
+    }
+    return result;
 }

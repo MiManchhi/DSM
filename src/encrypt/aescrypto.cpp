@@ -3,13 +3,26 @@
 #include <stdexcept>
 
 // 构造函数：初始化 AES 密钥
-AesCrypto::AesCrypto(const char* key, int keyLen) {
-    if (keyLen != 16 && keyLen != 24 && keyLen != 32) {
-        throw std::invalid_argument("AES 密钥长度必须是 16、24 或 32 字节。");
+AesCrypto::AesCrypto(const char* base64Key, int base64KeyLen) {
+    // Base64 解码
+    unsigned char* decodedKey = nullptr;
+    int decodedKeyLen = 0;
+    if (fromBase64(base64Key, base64KeyLen, decodedKey, decodedKeyLen) != OK) {
+        throw std::invalid_argument("Base64 密钥解码失败。");
     }
-    m_key = new char[keyLen];
-    memcpy(m_key, key, keyLen);
-    m_keyLen = keyLen;
+
+    // 检查解码后的密钥长度
+    if (decodedKeyLen != 16 && decodedKeyLen != 24 && decodedKeyLen != 32) {
+        delete[] decodedKey;
+        throw std::invalid_argument("解码后的密钥长度无效。");
+    }
+
+    // 保存解码后的二进制密钥
+    m_key = new char[decodedKeyLen];
+    memcpy(m_key, decodedKey, decodedKeyLen);
+    m_keyLen = decodedKeyLen;
+
+    delete[] decodedKey;
 }
 
 // 析构函数：释放资源
@@ -128,20 +141,26 @@ int AesCrypto::decrypt(const char* ciphertext, int ciphertextLen, char*& plainte
     return OK;
 }
 
-// 生成对称加密密钥
-int AesCrypto::generateKey(int keyLength, char*& key, int& keyLen) {
+// 生成对称加密密钥并输出 Base64 编码的密钥
+int AesCrypto::generateKey(int keyLength, char*& base64Key, int& base64KeyLen) {
     if (keyLength != 16 && keyLength != 24 && keyLength != 32) {
         return ERROR;
     }
 
-    // 为密钥分配空间
-    key = new char[keyLength];
+    // 生成二进制密钥
+    char* key = new char[keyLength];
     if (RAND_bytes((unsigned char*)key, keyLength) != 1) {
         delete[] key;
         return ERROR;
     }
 
-    keyLen = keyLength;
+    // 将二进制密钥编码为 Base64
+    if (toBase64((unsigned char*)key, keyLength, base64Key, base64KeyLen) != OK) {
+        delete[] key;
+        return ERROR;
+    }
+
+    delete[] key;
     return OK;
 }
 

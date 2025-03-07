@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package network;
+
+// 客户端公钥注册请求报文
+message ClientPublicKeyRegisterRequest {
+  string app_id = 1;          // 应用ID (16字节)
+  string user_id = 2;         // 用户ID (256字节)
+  int32 public_key_length = 3; // 公钥长度 (8字节)
+  bytes public_key = 4;       // 公钥 (256字节)
+  bytes signature = 5;        // 签名数据 (256字节)
+}
+
+// 服务器公钥注册请求报文
+message ServerPublicKeyRegisterRequest {
+  string app_id = 1;          // 应用ID (16字节)
+  string server_id = 2;       // serverID (128字节)
+  int32 public_key_length = 3; // 公钥长度 (8字节)
+  bytes public_key = 4;       // 公钥 (256字节)
+  bytes signature = 5;        // 签名数据 (256字节)
+}
+
+// 密钥协商应答报文
+message KeyNegotiationResponse {
+  int32 key_length = 1;       // 密钥长度 (8字节)
+  bytes key = 2;              // 密钥 (16字节)
+}
+
+// 客户端密钥协商请求报文
+message ClientKeyNegotiationRequest {
+  string app_id = 1;          // 应用ID (16字节)
+  string user_id = 2;         // 用户ID (256字节)
+}
+
+// 服务器密钥协商请求报文
+message ServerKeyNegotiationRequest {
+  string app_id = 1;          // 应用ID (16字节)
+  string server_id = 2;       // serverID (128字节)
+  string user_id = 3;         // userID (256字节)
+}

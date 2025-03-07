@@ -23,8 +23,8 @@ CFLAGS     = -c -Wall -Wextra -I../common -I../client
 DEBUG_FLAGS     = -g -O0
 RELEASE_FLAGS   = -O2
 # 库依赖项
-LIBS       = -pthread -L../../lib -lclient -lacl_all -lz
-DEBUG_LIBS = -pthread -L../../lib -lclientd -lacl_all -lz
+LIBS       = -pthread -L../../lib -lclient -lacl_all -lz -lssl -lcrypto
+DEBUG_LIBS = -pthread -L../../lib -lclientd -lacl_all -lz -lssl -lcrypto
 
 RM         = rm -rf
 

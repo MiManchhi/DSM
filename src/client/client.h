@@ -40,9 +40,9 @@ public:
     int del(char const *appid, char const *userid, char const *fileid);
 private:
     // 向密钥协商服务器发送公钥注册请求
-    int registerPublicKey(char const *appid, char const *userid, const long long &keylen, const char* publicKey, const char* signdata) const;
+    int registerPublicKey(char const *appid, char const *userid, const char *fileid);
     //向密钥协商服务器发送密钥协商请求
-    int getKey(char const *appid, char const *userid, char *&key, long long &keylen) const;
+    int getKey(char const *appid, char const *userid, const char *fileid, char *&key, long long &keylen);
 private:
     //线程池管理类
     static acl::connect_manager *s_pool_manager;
