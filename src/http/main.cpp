@@ -7,6 +7,7 @@
 int main(void) {
 	// 初始化ACL库
 	acl::acl_cpp_init();
+	acl::log::open("../../log/http.log");
 	acl::log::stdout_open(true);
 
 	// 创建并运行服务器

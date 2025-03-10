@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/QtPlayer.bmp</file>
+        <file>images/QtPlayer.ico</file>
+        <file>images/Play.ico</file>
+        <file>images/Pause.ico</file>
+        <file>images/Stop.ico</file>
+        <file>images/FastForward.ico</file>
+        <file>images/FastBackward.ico</file>
+        <file>images/About.ico</file>
+        <file>images/Quit.ico</file>
+        <file>translations/qtbase_zh_TW.qm</file>
+    </qresource>
+</RCC>
